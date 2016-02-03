@@ -1,10 +1,10 @@
-package org.processmining.newpackageivy.algorithms;
+package org.processmining.antialignments.algorithms;
 
+import org.processmining.antialignments.models.YourFirstInput;
+import org.processmining.antialignments.models.YourOutput;
+import org.processmining.antialignments.models.YourSecondInput;
+import org.processmining.antialignments.parameters.YourParameters;
 import org.processmining.framework.plugin.PluginContext;
-import org.processmining.newpackageivy.models.YourFirstInput;
-import org.processmining.newpackageivy.models.YourOutput;
-import org.processmining.newpackageivy.models.YourSecondInput;
-import org.processmining.newpackageivy.parameters.YourParameters;
 
 public class YourAlgorithm {
 

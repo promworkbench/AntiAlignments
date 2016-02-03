@@ -1,22 +1,22 @@
-package org.processmining.newpackageivy.plugins;
+package org.processmining.antialignments.plugins;
 
 import java.util.Collection;
 
 import org.deckfour.uitopia.api.event.TaskListener.InteractionResult;
+import org.processmining.antialignments.algorithms.YourAlgorithm;
+import org.processmining.antialignments.connections.YourConnection;
+import org.processmining.antialignments.dialogs.YourDialog;
+import org.processmining.antialignments.help.YourHelp;
+import org.processmining.antialignments.models.YourFirstInput;
+import org.processmining.antialignments.models.YourOutput;
+import org.processmining.antialignments.models.YourSecondInput;
+import org.processmining.antialignments.parameters.YourParameters;
 import org.processmining.contexts.uitopia.UIPluginContext;
 import org.processmining.contexts.uitopia.annotations.UITopiaVariant;
 import org.processmining.framework.connections.ConnectionCannotBeObtained;
 import org.processmining.framework.plugin.PluginContext;
 import org.processmining.framework.plugin.annotations.Plugin;
 import org.processmining.framework.plugin.annotations.PluginVariant;
-import org.processmining.newpackageivy.algorithms.YourAlgorithm;
-import org.processmining.newpackageivy.connections.YourConnection;
-import org.processmining.newpackageivy.dialogs.YourDialog;
-import org.processmining.newpackageivy.help.YourHelp;
-import org.processmining.newpackageivy.models.YourFirstInput;
-import org.processmining.newpackageivy.models.YourOutput;
-import org.processmining.newpackageivy.models.YourSecondInput;
-import org.processmining.newpackageivy.parameters.YourParameters;
 
 @Plugin(name = "Your plug-in name", parameterLabels = { "Name of your first input", "Name of your second input", "Name of your parameters" }, 
 	    returnLabels = { "Name of your output" }, returnTypes = { YourOutput.class }, help = YourHelp.TEXT)
