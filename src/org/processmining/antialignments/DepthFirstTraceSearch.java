@@ -33,11 +33,8 @@ public class DepthFirstTraceSearch {
 		 * @param word
 		 * @return
 		 */
-		public boolean handleTrace(Vector<Transition> firingSequence,
-				short[] word);
+		public boolean handleTrace(Vector<Transition> firingSequence, short[] word);
 	}
-
-	private static final Random RANDOM = new Random(1134246);
 
 	private final PetrinetSemantics semantics;
 	private final Petrinet net;
@@ -49,15 +46,14 @@ public class DepthFirstTraceSearch {
 	private final TObjectShortMap<String> label2short;
 	private final Marking finalMarking;
 
-	public DepthFirstTraceSearch(Petrinet net, Marking initialMarking,
-			Marking finalMarking, TObjectShortMap<String> label2short) {
+	public DepthFirstTraceSearch(Petrinet net, Marking initialMarking, Marking finalMarking,
+			TObjectShortMap<String> label2short) {
 		this.net = net;
 		this.initialMarking = initialMarking;
 		this.finalMarking = finalMarking;
 		this.label2short = label2short;
 
-		this.semantics = PetrinetSemanticsFactory
-				.regularPetrinetSemantics(Petrinet.class);
+		this.semantics = PetrinetSemanticsFactory.regularPetrinetSemantics(Petrinet.class);
 		this.semantics.initialize(net.getTransitions(), initialMarking);
 
 		this.currentStates = new Stack<>();
@@ -66,10 +62,8 @@ public class DepthFirstTraceSearch {
 		this.currentTransitions = new Stack<>();
 	}
 
-	public DepthFirstTraceSearch(MarkedNet markedNet,
-			TObjectShortMap<String> label2short) {
-		this(markedNet.net, markedNet.initialMarking, markedNet.finalMarking,
-				label2short);
+	public DepthFirstTraceSearch(MarkedNet markedNet, TObjectShortMap<String> label2short) {
+		this(markedNet.net, markedNet.initialMarking, markedNet.finalMarking, label2short);
 	}
 
 	/**
@@ -86,21 +80,20 @@ public class DepthFirstTraceSearch {
 	public short[][] getLanguage(int maxLength) {
 		// build all traces of length "max" for the model.
 
-		final TCustomHashSet<short[]> language = new TCustomHashSet<short[]>(
-				new HashingStrategy<short[]>() {
+		final TCustomHashSet<short[]> language = new TCustomHashSet<short[]>(new HashingStrategy<short[]>() {
 
-					private static final long serialVersionUID = -5834612520934860166L;
+			private static final long serialVersionUID = -5834612520934860166L;
 
-					@Override
-					public int computeHashCode(short[] arg0) {
-						return Arrays.hashCode(arg0);
-					}
+			@Override
+			public int computeHashCode(short[] arg0) {
+				return Arrays.hashCode(arg0);
+			}
 
-					@Override
-					public boolean equals(short[] arg0, short[] arg1) {
-						return Arrays.equals(arg0, arg1);
-					}
-				}) {
+			@Override
+			public boolean equals(short[] arg0, short[] arg1) {
+				return Arrays.equals(arg0, arg1);
+			}
+		}) {
 
 			public String toString() {
 				final StringBuilder buf = new StringBuilder("{");
@@ -127,8 +120,7 @@ public class DepthFirstTraceSearch {
 		depthFirstSearch(maxLength, new TraceHandler() {
 
 			@Override
-			public boolean handleTrace(Vector<Transition> firingSequence,
-					short[] word) {
+			public boolean handleTrace(Vector<Transition> firingSequence, short[] word) {
 				language.add(word);
 				return true;
 			}
@@ -156,8 +148,7 @@ public class DepthFirstTraceSearch {
 	 * @param maxLength
 	 * @param metric
 	 */
-	public AntiAlignments getAntiAlignments(final short[][] log,
-			final int maxLength, final double maxFactor,
+	public AntiAlignments getAntiAlignments(final short[][] log, final int maxLength, final double maxFactor,
 			final DistanceMetric metric) {
 
 		final AntiAlignments antiAlignments = new AntiAlignments(log.length);
@@ -165,8 +156,7 @@ public class DepthFirstTraceSearch {
 		Arrays.fill(antiAlignments.getMaxDistances(), Integer.MAX_VALUE);
 		for (int t = 0; t < log.length; t++) {
 			for (int u = log.length + 1; u-- > 0;) {
-				if (u != t
-						&& antiAlignments.getMaxDistances()[u] > (int) (log[t].length * maxFactor)) {
+				if (u != t && antiAlignments.getMaxDistances()[u] > (int) (log[t].length * maxFactor)) {
 					antiAlignments.getMaxDistances()[u] = (int) (log[t].length * maxFactor);
 				}
 			}
@@ -199,8 +189,7 @@ public class DepthFirstTraceSearch {
 			final int[] currentMin = new int[log.length + 1];
 
 			@Override
-			public boolean handleTrace(Vector<Transition> firingSequence,
-					short[] word) {
+			public boolean handleTrace(Vector<Transition> firingSequence, short[] word) {
 				calls++;
 				// determine if minimum higher than current minimum for:
 				// 1) whole log,
@@ -223,19 +212,16 @@ public class DepthFirstTraceSearch {
 					// ignore if word is longer than the max for the removed
 					// trace!
 					if ((t == length || word.length <= (int) (log[t].length * maxFactor))
-							&& currentMin[t] > antiAlignments
-									.getMaxMinDistances()[t]) {
+							&& currentMin[t] > antiAlignments.getMaxMinDistances()[t]) {
 						// new anti-alignment found!
 						antiAlignments.getMaxMinDistances()[t] = currentMin[t];
 						antiAlignments.getAntiAlignments()[t] = word;
 						antiAlignments.getTraces()[t] = firingSequence;
 						if (t < length) {
-							antiAlignments.getTraceDistances()[t] = metric
-									.getDistance(log[t], word);
+							antiAlignments.getTraceDistances()[t] = metric.getDistance(log[t], word);
 						}
 					}
-					stop &= antiAlignments.getMaxMinDistances()[t] == antiAlignments
-							.getMaxDistances()[t];
+					stop &= antiAlignments.getMaxMinDistances()[t] == antiAlignments.getMaxDistances()[t];
 				}
 				// if (stop) {
 				// System.out.println("Processed " + calls + " traces.");
@@ -247,26 +233,20 @@ public class DepthFirstTraceSearch {
 		return antiAlignments;
 	}
 
-	protected void depthFirstSearch(final int maxLength,
-			final TraceHandler handler) {
+	protected void depthFirstSearch(final int maxLength, final TraceHandler handler) {
 		this.currentLabels = new short[maxLength];
 		depthFirstSearchInternal(maxLength, 0, handler);
-		
-		
-	}
-	
 
-	protected boolean depthFirstSearchInternal(final int maxLength, int length,
-			final TraceHandler handler) {
+	}
+
+	protected boolean depthFirstSearchInternal(final int maxLength, int length, final TraceHandler handler) {
 
 		semantics.setCurrentState(currentStates.peek());
-		List<Transition> transitions = new ArrayList<Transition>(
-				semantics.getExecutableTransitions());
-		Collections.shuffle(transitions, RANDOM);
+		List<Transition> transitions = new ArrayList<Transition>(semantics.getExecutableTransitions());
+		Collections.shuffle(transitions, new Random(1134246));
 		if (currentStates.peek().equals(finalMarking)) {
 			// complete trace found. Add copy of currentlabels to language.
-			if (!handler.handleTrace(
-					(Vector<Transition>) currentTransitions.clone(),
+			if (!handler.handleTrace((Vector<Transition>) currentTransitions.clone(),
 					Arrays.copyOf(currentLabels, length))) {
 				// abort the search!
 				return false;
@@ -287,14 +267,12 @@ public class DepthFirstTraceSearch {
 			if (t.isInvisible()) {
 				// do not add the label to the word and continue with
 				// same length
-				continueNext = depthFirstSearchInternal(maxLength, length,
-						handler);
+				continueNext = depthFirstSearchInternal(maxLength, length, handler);
 			} else if (length < maxLength) {
 				// add the label to the word and continue with
 				// length +1
 				currentLabels[length] = label2short.get(t.getLabel());
-				continueNext = depthFirstSearchInternal(maxLength, length + 1,
-						handler);
+				continueNext = depthFirstSearchInternal(maxLength, length + 1, handler);
 			}
 			currentTransitions.pop();
 			currentStates.pop();

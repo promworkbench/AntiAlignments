@@ -37,7 +37,7 @@ public class AlignmentSetup {
 	private XLog log;
 	private Map<Transition, Integer> costMOS;
 	private Map<XEventClass, Integer> costMOT;
-	private TransEvClassMapping mapping;
+	TransEvClassMapping mapping;
 
 	public AlignmentSetup(Petrinet net, XLog log) {
 
@@ -64,11 +64,12 @@ public class AlignmentSetup {
 		parameters.setFinalMarkings(finalMarking);
 		parameters.setGUIMode(false);
 		parameters.setCreateConn(false);
-		parameters.setNumThreads(8);
+		parameters.setNumThreads(Runtime.getRuntime().availableProcessors());
 
 		PNRepResult result = null;
 		try {
 			result = replayEngine.replayLog(null, net, log, mapping, parameters);
+
 		} catch (AStarException e) {
 			e.printStackTrace();
 		}

@@ -1,52 +1,26 @@
 package org.processmining.antialignments;
 
-import gnu.trove.list.TShortList;
-import gnu.trove.list.array.TShortArrayList;
-import gnu.trove.map.TObjectShortMap;
-import gnu.trove.map.hash.TObjectShortHashMap;
-import gnu.trove.set.TShortSet;
-import gnu.trove.set.hash.TShortHashSet;
-
 import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
 import java.util.Set;
-import java.util.Vector;
 
-import org.deckfour.xes.extension.std.XConceptExtension;
-import org.deckfour.xes.model.XAttributeDiscrete;
-import org.deckfour.xes.model.XEvent;
 import org.deckfour.xes.model.XLog;
-import org.deckfour.xes.model.XTrace;
-import org.deckfour.xes.out.XesXmlGZIPSerializer;
-import org.processmining.antialignments.pathfinder.AntiAlignmentFinder;
 import org.processmining.antialignments.pathfinder.AntiAlignments;
 import org.processmining.log.utils.XLogBuilder;
 import org.processmining.models.graphbased.directed.petrinet.Petrinet;
 import org.processmining.models.graphbased.directed.petrinet.elements.Place;
 import org.processmining.models.graphbased.directed.petrinet.elements.Transition;
 import org.processmining.models.graphbased.directed.petrinet.impl.PetrinetFactory;
-import org.processmining.models.semantics.IllegalTransitionException;
 import org.processmining.models.semantics.petrinet.Marking;
-import org.processmining.models.semantics.petrinet.PetrinetSemantics;
-import org.processmining.models.semantics.petrinet.impl.PetrinetSemanticsFactory;
 import org.processmining.plugins.petrinet.importing.tpn.TpnImport;
 import org.processmining.plugins.petrinet.importing.tpn.TpnParser;
-import org.processmining.plugins.petrinet.replayresult.PNRepResult;
-import org.processmining.plugins.replayer.replayresult.SyncReplayResult;
 
 public class TestAntiAlignment {
 
@@ -55,8 +29,7 @@ public class TestAntiAlignment {
 		public final Marking initialMarking;
 		public final Marking finalMarking;
 
-		public MarkedNet(Petrinet net, Marking initialMarking,
-				Marking finalMarking) {
+		public MarkedNet(Petrinet net, Marking initialMarking, Marking finalMarking) {
 			this.net = net;
 			this.initialMarking = initialMarking;
 			this.finalMarking = finalMarking;
@@ -75,16 +48,15 @@ public class TestAntiAlignment {
 		String path = "D:\\Documents\\Dropbox\\Boudewijn Werk\\Research\\Papers\\"
 				+ "2016 Precision Generalization Josep\\Models for experiments\\ExampleBookWil\\";
 
-		path = "D:\\Documents\\CloudStation private\\Werk\\Reviews\\INS-D-16-665\\";
+		// path = "D:\\Documents\\CloudStation private\\Werk\\Reviews\\INS-D-16-665\\";
 
-		Set<String> labels = new HashSet<String>();
-		XLog log = loadLogFullTrace(path + "log.trace", labels);
-		//
-		OutputStream out = new BufferedOutputStream(new FileOutputStream(
-				new File(path + "log_whole.xez")));
-		new XesXmlGZIPSerializer().serialize(log, out);
-		out.close();
-		System.exit(0);
+		//		Set<String> labels = new HashSet<String>();
+		//		XLog log = loadLogFullTrace(path + "log.trace", labels);
+		//		//
+		//		OutputStream out = new BufferedOutputStream(new FileOutputStream(new File(path + "log_whole.xez")));
+		//		new XesXmlGZIPSerializer().serialize(log, out);
+		//		out.close();
+		//		System.exit(0);
 
 		// String path =
 		// "D:\\Documents\\Dropbox\\Boudewijn Werk\\Research\\Papers\\"
@@ -107,15 +79,14 @@ public class TestAntiAlignment {
 
 				if (!verbose) {
 					System.out.println("Log: " + logfile);
-					System.out
-							.println("model\tFw\tFu\tP_t^w\tP_t^u\tG_t^w\tG_t^u\tP_l^w\tP_l^u\tG_l^w\tG_l^u");
+					System.out.println("model\tFw\tP_t^u\tG_t^w\tP_l^u\tG_l^w");
 				}
 				for (File f : new File(path).listFiles()) {
 					if (f.getName().endsWith(".tpn")) {
 						String modelfile = f.getName();
 
-						doExperimentForModelAndLog(path, modelfile, logfile,
-								new DistanceMetric.Edit(), maxFactor, verbose);
+						doExperimentForModelAndLog(path, modelfile, logfile, new DistanceMetric.Edit(), maxFactor,
+								verbose);
 
 					}
 				}
@@ -127,8 +98,7 @@ public class TestAntiAlignment {
 		}
 	}
 
-	public static void doExperimentForModelAndLog(String path,
-			String modelfile, String logfile, DistanceMetric metric,
+	public static void doExperimentForModelAndLog(String path, String modelfile, String logfile, DistanceMetric metric,
 			double maxFactor, boolean verbose) throws IOException {
 
 		if (!verbose) {
@@ -154,193 +124,189 @@ public class TestAntiAlignment {
 		if (verbose) {
 			System.out.println("Log loaded: " + logfile);
 		}
-		String xesLogName = fullLogFile.substring(0,
-				fullLogFile.lastIndexOf('.'))
-				+ ".xez";
-		FileOutputStream out = new FileOutputStream(new File(xesLogName));
-		new XesXmlGZIPSerializer().serialize(xLog, out);
-		out.close();
+		//		String xesLogName = fullLogFile.substring(0, fullLogFile.lastIndexOf('.')) + ".xez";
+		//		FileOutputStream out = new FileOutputStream(new File(xesLogName));
+		//		new XesXmlGZIPSerializer().serialize(xLog, out);
+		//		out.close();
 
-		int[] frequencies = new int[xLog.size()];
-
-		TObjectShortMap<String> label2short = new TObjectShortHashMap<>(
-				(5 * labels.size()) / 4);
-		String[] short2label = new String[labels.size()];
-		short i = 0;
-		for (String label : labels) {
-			short2label[i] = label;
-			label2short.put(label, i);
-			i++;
-		}
-
-		// We have a mapping from shorts to labels and vv
-		// Prepare the log in a model efficient form
-		short[][] log = new short[xLog.size()][];
-		int t = 0;
-		int max = 0;
-		for (XTrace trace : xLog) {
-			log[t] = new short[trace.size()];
-			frequencies[t] = (int) ((XAttributeDiscrete) trace.getAttributes()
-					.get(FREQUENCYATTRIBUTE)).getValue();
-			int e = 0;
-			for (XEvent event : trace) {
-				log[t][e] = label2short.get(XConceptExtension.instance()
-						.extractName(event));
-				e++;
-			}
-			if (log[t].length > max) {
-				max = log[t].length;
-			}
-			t++;
-		}
-		if (verbose) {
-			System.out.println("Log converted: " + log.length + " traces...");
-		}
-
-		// Let's align the log to the model.
-		AlignmentSetup alignmentAlgorithm = new AlignmentSetup(markedNet.net,
-				xLog);
-		PNRepResult alignments = alignmentAlgorithm.getAlignment(
-				markedNet.initialMarking, markedNet.finalMarking, true);
-
-		Iterator<SyncReplayResult> it = alignments.iterator();
-		List[] firingSequences = new List[log.length];
-		short[][] alignedLog = new short[log.length][];
-		double unweightedFitness = 0;
-		double weightedFitness = 0;
-		int sumFreq = 0;
-		while (it.hasNext()) {
-			SyncReplayResult res = it.next();
-			for (Integer trace : res.getTraceIndex()) {
-				firingSequences[trace] = new ArrayList<Transition>();
-				TShortList modelSeq = new TShortArrayList();
-				for (Object nodeStep : res.getNodeInstance()) {
-					if ((nodeStep instanceof Transition)) {
-						if (!((Transition) nodeStep).isInvisible()) {
-							modelSeq.add(label2short
-									.get(((Transition) nodeStep).getLabel()));
-						}
-						firingSequences[trace].add(nodeStep);
-					}
-				}
-				alignedLog[trace] = modelSeq.toArray();
-				if (alignedLog[trace].length > max) {
-					max = alignedLog[trace].length;
-				}
-				unweightedFitness += (Double) res.getInfo().get(
-						PNRepResult.TRACEFITNESS);
-				weightedFitness += frequencies[trace]
-						* (Double) res.getInfo().get(PNRepResult.TRACEFITNESS);
-				sumFreq += frequencies[trace];
-			}
-		}
-		unweightedFitness /= log.length;
-		weightedFitness /= sumFreq;
-
-		// FIXME: Here, we give the anti-alignment algorithm the aligned log.
-		// Should we do that?
-		// We get anti-alignments for each trace, where the maximum length
-		// is bound to maxFactor * traceLength.
-		// The maximum length of the anti-alignment for the log is bound
-		// to maxFactor * (max)
-		max *= 2;
-		long start = System.nanoTime();
-		AntiAlignments aa = new DepthFirstTraceSearch(markedNet, label2short)
-				.getAntiAlignments(alignedLog, max, maxFactor, metric);
-		long mid = System.nanoTime();
-		AntiAlignmentFinder finder = new AntiAlignmentFinder(markedNet.net,
-				markedNet.initialMarking, markedNet.finalMarking, label2short);
-		AntiAlignments aa2 = finder
-				.getAntiAlignment(alignedLog, max, maxFactor);
-		long end = System.nanoTime();
-
-		if (verbose) {
-			printEditDistances(alignedLog, aa);
-			printEditDistances(alignedLog, aa2);
-			System.out.println("Time: " + (mid - start) / 1000000.0 + " vs. "
-					+ (end - mid) / 1000000.0);
-		}
-		// BVD: Comment this out to use the new finder.
-		// aa = aa2;
-
-		// test for equality
-
-		log = alignedLog;
-
-		double[] weightedPrecision = computePrecision(aa, log, frequencies,
-				max, maxFactor);
-		double[] unweightedPrecision = computePrecision(aa, log, null, max,
-				maxFactor);
-
-		// now for the generalization part.
-		// compute the states that were visited by the aligned log, using the
-		// firing sequences in the aligned log
-		Map<Marking, TShortSet> statesVisitedPerTrace = getStatesVisitedPerTrace(
-				markedNet.net, markedNet.initialMarking, firingSequences);
-
-		int[] count = new int[log.length + 1];
-		double[] recDist = new double[log.length + 1];
-
-		int[] cAndRD = countNewStatesAndRecoveryDistance(markedNet.net,
-				markedNet.initialMarking, aa.getAAFiringSequenceForLog(),
-				statesVisitedPerTrace, (short) -1);
-		count[log.length] = cAndRD[0];
-		recDist[log.length] = cAndRD[1];
-
-		for (short tr = 0; tr < log.length; tr++) {
-
-			cAndRD = countNewStatesAndRecoveryDistance(markedNet.net,
-					markedNet.initialMarking,
-					aa.getAAFiringSequenceForLogWithoutTrace(tr),
-					statesVisitedPerTrace, tr);
-			count[tr] = cAndRD[0];
-			recDist[tr] = cAndRD[1];
-
-		}
-		if (verbose) {
-			printAntiAlignments(modelfile, aa, log, frequencies, count,
-					recDist, short2label, verbose);
-		}
-
-		double[] weightedGeneralization = computeGeneralization(aa, log,
-				frequencies, recDist, count, max, maxFactor);
-		double[] unweightedGeneralization = computeGeneralization(aa, log,
-				null, recDist, count, max, maxFactor);
-		if (verbose) {
-			System.out.println("F_w:   " + weightedFitness);
-			System.out.println("F_u:   " + unweightedFitness);
-			System.out.println("P_t^w: " + weightedPrecision[0]);
-			System.out.println("P_t^u: " + unweightedPrecision[0]);
-			System.out.println("G_t^w: " + weightedGeneralization[0]);
-			System.out.println("G_t^u: " + unweightedGeneralization[0]);
-			System.out.println("P_l^w: " + weightedPrecision[1]);
-			System.out.println("P_l^u: " + unweightedPrecision[1]);
-			System.out.println("G_l^w: " + weightedGeneralization[1]);
-			System.out.println("G_l^u: " + unweightedGeneralization[1]);
-		}
+		AntiAlignmentValues result = AntiAlignmentPlugin.basicCodeStructureWithoutAlignments(markedNet.net, markedNet.initialMarking,
+				markedNet.finalMarking, xLog);
 
 		if (!verbose) {
-			System.out.print(weightedFitness);
+			System.out.print(result.getFitness());
 			System.out.print("\t");
-			System.out.print(unweightedFitness);
+			System.out.print(result.getTracePrecision());
 			System.out.print("\t");
-			System.out.print(weightedPrecision[0]);
+			System.out.print(result.getLogPrecision());
 			System.out.print("\t");
-			System.out.print(unweightedPrecision[0]);
+			System.out.print(result.getPrecision());
 			System.out.print("\t");
-			System.out.print(weightedGeneralization[0]);
+			System.out.print(result.getTraceGeneralization());
 			System.out.print("\t");
-			System.out.print(unweightedGeneralization[0]);
+			System.out.print(result.getLogGeneralization());
 			System.out.print("\t");
-			System.out.print(weightedPrecision[1]);
-			System.out.print("\t");
-			System.out.print(unweightedPrecision[1]);
-			System.out.print("\t");
-			System.out.print(weightedGeneralization[1]);
-			System.out.print("\t");
-			System.out.print(unweightedGeneralization[1]);
+			System.out.print(result.getGeneralization());
 			System.out.println();
 		}
+		
+		//		int[] frequencies = new int[xLog.size()];
+		//
+		//		TObjectShortMap<String> label2short = new TObjectShortHashMap<>(
+		//				(5 * labels.size()) / 4);
+		//		String[] short2label = new String[labels.size()];
+		//		short i = 0;
+		//		for (String label : labels) {
+		//			short2label[i] = label;
+		//			label2short.put(label, i);
+		//			i++;
+		//		}
+		//
+		//		// We have a mapping from shorts to labels and vv
+		//		// Prepare the log in a model efficient form
+		//		short[][] log = new short[xLog.size()][];
+		//		int t = 0;
+		//		int max = 0;
+		//		for (XTrace trace : xLog) {
+		//			log[t] = new short[trace.size()];
+		//			frequencies[t] = (int) ((XAttributeDiscrete) trace.getAttributes()
+		//					.get(FREQUENCYATTRIBUTE)).getValue();
+		//			int e = 0;
+		//			for (XEvent event : trace) {
+		//				log[t][e] = label2short.get(XConceptExtension.instance()
+		//						.extractName(event));
+		//				e++;
+		//			}
+		//			if (log[t].length > max) {
+		//				max = log[t].length;
+		//			}
+		//			t++;
+		//		}
+		//		if (verbose) {
+		//			System.out.println("Log converted: " + log.length + " traces...");
+		//		}
+		//
+		//		// Let's align the log to the model.
+		//		AlignmentSetup alignmentAlgorithm = new AlignmentSetup(markedNet.net,
+		//				xLog);
+		//		PNRepResult alignments = alignmentAlgorithm.getAlignment(
+		//				markedNet.initialMarking, markedNet.finalMarking, true);
+		//
+		//		Iterator<SyncReplayResult> it = alignments.iterator();
+		//		List[] firingSequences = new List[log.length];
+		//		short[][] alignedLog = new short[log.length][];
+		//		double unweightedFitness = 0;
+		//		double weightedFitness = 0;
+		//		int sumFreq = 0;
+		//		while (it.hasNext()) {
+		//			SyncReplayResult res = it.next();
+		//			for (Integer trace : res.getTraceIndex()) {
+		//				firingSequences[trace] = new ArrayList<Transition>();
+		//				TShortList modelSeq = new TShortArrayList();
+		//				for (Object nodeStep : res.getNodeInstance()) {
+		//					if ((nodeStep instanceof Transition)) {
+		//						if (!((Transition) nodeStep).isInvisible()) {
+		//							modelSeq.add(label2short
+		//									.get(((Transition) nodeStep).getLabel()));
+		//						}
+		//						firingSequences[trace].add(nodeStep);
+		//					}
+		//				}
+		//				alignedLog[trace] = modelSeq.toArray();
+		//				if (alignedLog[trace].length > max) {
+		//					max = alignedLog[trace].length;
+		//				}
+		//				unweightedFitness += (Double) res.getInfo().get(
+		//						PNRepResult.TRACEFITNESS);
+		//				weightedFitness += frequencies[trace]
+		//						* (Double) res.getInfo().get(PNRepResult.TRACEFITNESS);
+		//				sumFreq += frequencies[trace];
+		//			}
+		//		}
+		//		unweightedFitness /= log.length;
+		//		weightedFitness /= sumFreq;
+		//
+		//		// FIXME: Here, we give the anti-alignment algorithm the aligned log.
+		//		// Should we do that?
+		//		// We get anti-alignments for each trace, where the maximum length
+		//		// is bound to maxFactor * traceLength.
+		//		// The maximum length of the anti-alignment for the log is bound
+		//		// to maxFactor * (max)
+		//		max *= 2;
+		//		long start = System.nanoTime();
+		//		AntiAlignments aa = new DepthFirstTraceSearch(markedNet, label2short)
+		//				.getAntiAlignments(alignedLog, max, maxFactor, metric);
+		//		long mid = System.nanoTime();
+		//		AntiAlignmentFinder finder = new AntiAlignmentFinder(markedNet.net,
+		//				markedNet.initialMarking, markedNet.finalMarking, label2short);
+		//		AntiAlignments aa2 = finder
+		//				.getAntiAlignment(alignedLog, max, maxFactor);
+		//		long end = System.nanoTime();
+		//
+		//		if (verbose) {
+		//			printEditDistances(alignedLog, aa);
+		//			printEditDistances(alignedLog, aa2);
+		//			System.out.println("Time: " + (mid - start) / 1000000.0 + " vs. "
+		//					+ (end - mid) / 1000000.0);
+		//		}
+		//		// BVD: Comment this out to use the new finder.
+		//		// aa = aa2;
+		//
+		//		// test for equality
+		//
+		//		log = alignedLog;
+		//
+		//		double[] weightedPrecision = computePrecision(aa, log, frequencies,
+		//				max, maxFactor);
+		//		double[] unweightedPrecision = computePrecision(aa, log, null, max,
+		//				maxFactor);
+		//
+		//		// now for the generalization part.
+		//		// compute the states that were visited by the aligned log, using the
+		//		// firing sequences in the aligned log
+		//		Map<Marking, TShortSet> statesVisitedPerTrace = getStatesVisitedPerTrace(
+		//				markedNet.net, markedNet.initialMarking, firingSequences);
+		//
+		//		int[] count = new int[log.length + 1];
+		//		double[] recDist = new double[log.length + 1];
+		//
+		//		int[] cAndRD = countNewStatesAndRecoveryDistance(markedNet.net,
+		//				markedNet.initialMarking, aa.getAAFiringSequenceForLog(),
+		//				statesVisitedPerTrace, (short) -1);
+		//		count[log.length] = cAndRD[0];
+		//		recDist[log.length] = cAndRD[1];
+		//
+		//		for (short tr = 0; tr < log.length; tr++) {
+		//
+		//			cAndRD = countNewStatesAndRecoveryDistance(markedNet.net,
+		//					markedNet.initialMarking,
+		//					aa.getAAFiringSequenceForLogWithoutTrace(tr),
+		//					statesVisitedPerTrace, tr);
+		//			count[tr] = cAndRD[0];
+		//			recDist[tr] = cAndRD[1];
+		//
+		//		}
+		//		if (verbose) {
+		//			printAntiAlignments(modelfile, aa, log, frequencies, count,
+		//					recDist, short2label, verbose);
+		//		}
+		//
+		//		double[] weightedGeneralization = computeGeneralization(aa, log,
+		//				frequencies, recDist, count, max, maxFactor);
+		//		double[] unweightedGeneralization = computeGeneralization(aa, log,
+		//				null, recDist, count, max, maxFactor);
+		//		if (verbose) {
+		//			System.out.println("F_w:   " + weightedFitness);
+		//			System.out.println("F_u:   " + unweightedFitness);
+		//			System.out.println("P_t^w: " + weightedPrecision[0]);
+		//			System.out.println("P_t^u: " + unweightedPrecision[0]);
+		//			System.out.println("G_t^w: " + weightedGeneralization[0]);
+		//			System.out.println("G_t^u: " + unweightedGeneralization[0]);
+		//			System.out.println("P_l^w: " + weightedPrecision[1]);
+		//			System.out.println("P_l^u: " + unweightedPrecision[1]);
+		//			System.out.println("G_l^w: " + weightedGeneralization[1]);
+		//			System.out.println("G_l^u: " + unweightedGeneralization[1]);
+		//		}
+		//
 
 	}
 
@@ -361,8 +327,7 @@ public class TestAntiAlignment {
 			int dt = 0;
 			System.out.print("ignore " + tti + "   ");
 			for (int tr = 0; tr < log.length; tr++) {
-				int d = edit.getDistance(aa.getAAForLogWithoutTrace(tti),
-						log[tr]);
+				int d = edit.getDistance(aa.getAAForLogWithoutTrace(tti), log[tr]);
 				if (tr != tti && d < min) {
 					min = d;
 				}
@@ -373,176 +338,6 @@ public class TestAntiAlignment {
 			}
 			System.out.println("Dlog=" + min + ",Drem=" + dt);
 		}
-	}
-
-	public static int[] countNewStatesAndRecoveryDistance(Petrinet net,
-			Marking initialMarking, Vector<Transition> firingSequence,
-			Map<Marking, TShortSet> statesVisitedPerTrace, short indexToIgnore) {
-
-		PetrinetSemantics semantics = PetrinetSemanticsFactory
-				.regularPetrinetSemantics(Petrinet.class);
-		semantics.initialize(net.getTransitions(), initialMarking);
-		BreadthFirstTraceSearch breadthFirstSearch = new BreadthFirstTraceSearch(
-				net, initialMarking, statesVisitedPerTrace);
-
-		int length = firingSequence.size();
-		int count = 0;
-		int maxRecDist = 0;
-		int sumRecDist = 0;
-		for (Transition t : firingSequence) {
-			try {
-				semantics.executeExecutableTransition(t);
-				length--;
-			} catch (IllegalTransitionException e) {
-				e.printStackTrace();
-			}
-			TShortSet set = statesVisitedPerTrace.get(semantics
-					.getCurrentState());
-			if (set == null || (set.size() == 1 && set.contains(indexToIgnore))) {
-				count++;
-				// state that is not reached in the log. Let's compute recovery
-				// distance.
-				int recDist = breadthFirstSearch.getShortestDistance(
-						semantics.getCurrentState(), length, indexToIgnore);
-				if (recDist > maxRecDist) {
-					maxRecDist = recDist;
-				}
-				sumRecDist += recDist;
-			}
-		}
-		return new int[] { count, maxRecDist, sumRecDist, firingSequence.size() };
-	}
-
-	/**
-	 * Returns a map from markings to a set of trace indices, such that each
-	 * trace in the set has visited this particular state.
-	 * 
-	 * @param net
-	 * @param initialMarking
-	 * @param firingSequences
-	 * @return
-	 */
-	public static Map<Marking, TShortSet> getStatesVisitedPerTrace(
-			Petrinet net, Marking initialMarking,
-			List<Transition>[] firingSequences) {
-
-		Map<Marking, TShortSet> map = new HashMap<>();
-
-		PetrinetSemantics semantics = PetrinetSemanticsFactory
-				.regularPetrinetSemantics(Petrinet.class);
-		semantics.initialize(net.getTransitions(), initialMarking);
-
-		for (short i = 0; i < firingSequences.length; i++) {
-			semantics.setCurrentState(initialMarking);
-			map.putIfAbsent(initialMarking, new TShortHashSet(
-					firingSequences.length, 0.75f, Short.MIN_VALUE));
-			map.get(initialMarking).add(i);
-			for (Transition t : firingSequences[i]) {
-				try {
-					semantics.executeExecutableTransition(t);
-				} catch (IllegalTransitionException e) {
-					e.printStackTrace();
-				}
-				map.putIfAbsent(semantics.getCurrentState(), new TShortHashSet(
-						firingSequences.length, 0.75f, Short.MIN_VALUE));
-				map.get(semantics.getCurrentState()).add(i);
-			}
-		}
-
-		return map;
-	}
-
-	private static double[] computePrecision(AntiAlignments aa, short[][] log,
-			int[] frequencies, int max, double maxFactor) {
-
-		double sum = 0;
-		int sumFreq = 0;
-		int f = 1;
-		for (int t = 0; t < aa.getLogLength(); t++) {
-			if (frequencies != null) {
-				f = frequencies[t];
-			}
-			// the distance to the removed trace is at most the
-			// length of the removed trace
-			assert (int) (log[t].length * maxFactor) >= aa
-					.getAADistanceToTrace(t);
-			// we normalize on the length of the trace * maxFactor as this is
-			// the given maximum
-			// to the anti-alignment algorithm.
-			// sum += f
-			// * (aa.getAADistanceToTrace(t) / (double) ((int) (log[t].length *
-			// maxFactor)));
-
-			// We can also normalize on the length of the returned
-			// anti-alignment!
-			double d = Math.min(aa.getAAForLogWithoutTrace(t).length,
-					log[t].length * maxFactor);
-			sum += d < 1 ? f : f * (aa.getAADistanceToTrace(t) / d);
-			sumFreq += f;
-
-		}
-		double d = Math.min(aa.getAAForLog().length, max * maxFactor);
-		return new double[] { 1 - sum / (double) sumFreq,
-				d < 1 ? 0 : 1 - aa.getAADistanceForLog() / d };
-
-	}
-
-	private static double[] computeGeneralization(AntiAlignments aa,
-			short[][] log, int[] frequencies, double[] recDistances,
-			int[] newStateCounts, int max, double maxFactor) {
-
-		double sum = 0;
-		int sumFreq = 0;
-		int f = 1;
-		for (int t = 0; t < aa.getLogLength(); t++) {
-			if (frequencies != null) {
-				f = frequencies[t];
-			}
-			// sum += f
-			// * Math.max(0, aa.getAADistanceForLogWithoutTrace(t)
-			// - recDistances[t])
-			// / (double) aa.getMaxDistanceForTrace(t);
-			double d = Math.max(aa.getAAForLogWithoutTrace(t).length,
-					aa.getMaxDistanceForTrace(t));
-			double aaDistance = d < 1 ? 1 : aa
-					.getAADistanceForLogWithoutTrace(t) / d;
-			assert 0 <= aaDistance && aaDistance <= 1;
-			// double recDistance = newStateCounts[t] == 0 ? 0 : recDistances[t]
-			// / (double) (newStateCounts[t]);
-			d = (aa.getAAFiringSequenceForLogWithoutTrace(t).size() - 1);
-			double recDistance = d < 1 ? 1 : recDistances[t] / d;
-			assert 0 <= recDistance && recDistance <= 1;
-
-			// double d = Math.max(0, aaDistance - recDistance);
-			// sum += f * Math.sqrt(2 * d - d * d);
-			// sum += f * Math.abs(aaDistance - recDistance);
-			// sum += f * (1 - Math.abs(aaDistance + recDistance - 1));
-
-			d = (1 - aaDistance) * (1 - aaDistance);
-			d += (recDistance) * (recDistance);
-			d = Math.sqrt(d);
-			d = Math.min(1, d);
-			sum += f * (1 - d);
-			// sum += f * d;
-
-			sumFreq += f;
-
-		}
-
-		double d = Math.min(aa.getAAForLog().length, max * maxFactor);
-		double aaDistance = d < 1 ? 1 : aa.getAADistanceForLog() / d;
-		assert 0 <= aaDistance && aaDistance <= 1;
-		// double recDistance = newStateCounts[t] == 0 ? 0 : recDistances[t]
-		// / (double) (newStateCounts[t]);
-		d = aa.getAAFiringSequenceForLog().size() - 1;
-		double recDistance = d < 1 ? 1 : recDistances[log.length] / d;
-		d = (1 - aaDistance) * (1 - aaDistance);
-		d += recDistance * recDistance;
-		d = Math.sqrt(d);
-		d = Math.min(1, d);
-
-		return new double[] { (sum / (double) sumFreq), 1 - d };
-
 	}
 
 	public static String toString(short[] sequence, String[] short2label) {
@@ -557,8 +352,7 @@ public class TestAntiAlignment {
 		return s;
 	}
 
-	public static XLog loadLog(String filename, Set<String> labels)
-			throws IOException {
+	public static XLog loadLog(String filename, Set<String> labels) throws IOException {
 		File logFile = new File(filename);
 
 		BufferedReader reader = new BufferedReader(new FileReader(logFile));
@@ -568,14 +362,18 @@ public class TestAntiAlignment {
 			int t = 1;
 			String line = reader.readLine();
 			while (line != null) {
-				builder.addTrace("line " + (t++));
 				String[] events = line.split(" ");
 				int freq = Integer.parseInt(events[0]);
-				builder.addAttribute(FREQUENCYATTRIBUTE, freq);
-				for (int i = 1; i < events.length; i++) {
-					builder.addEvent(events[i]);
-					labels.add(events[i]);
+
+				for (int c = 0; c < freq; c++) {
+					builder.addTrace("line " + t + "." + c);
+					//					builder.addAttribute(FREQUENCYATTRIBUTE, freq);
+					for (int i = 1; i < events.length; i++) {
+						builder.addEvent(events[i]);
+						labels.add(events[i]);
+					}
 				}
+				t++;
 				line = reader.readLine();
 			}
 
@@ -585,8 +383,7 @@ public class TestAntiAlignment {
 		return builder.build();
 	}
 
-	public static XLog loadLogFull(String filename, Set<String> labels)
-			throws IOException {
+	public static XLog loadLogFull(String filename, Set<String> labels) throws IOException {
 		File logFile = new File(filename);
 
 		BufferedReader reader = new BufferedReader(new FileReader(logFile));
@@ -618,8 +415,7 @@ public class TestAntiAlignment {
 		return builder.build();
 	}
 
-	public static XLog loadLogFullTrace(String filename, Set<String> labels)
-			throws IOException {
+	public static XLog loadLogFullTrace(String filename, Set<String> labels) throws IOException {
 		File logFile = new File(filename);
 
 		BufferedReader reader = new BufferedReader(new FileReader(logFile));
@@ -648,8 +444,7 @@ public class TestAntiAlignment {
 		return builder.build();
 	}
 
-	public static MarkedNet loadModel(String filename, boolean verbose)
-			throws IOException {
+	public static MarkedNet loadModel(String filename, boolean verbose) throws IOException {
 
 		File pnFile = new File(filename);
 		InputStream in = new BufferedInputStream(new FileInputStream(pnFile));
@@ -664,8 +459,7 @@ public class TestAntiAlignment {
 			// marking of "+p.getLabel(), state, context);
 
 			// logEvents = new LogEvents();
-			Iterator<? extends Transition> it = petrinet.getTransitions()
-					.iterator();
+			Iterator<? extends Transition> it = petrinet.getTransitions().iterator();
 
 			while (it.hasNext()) {
 				Transition t = it.next();
@@ -704,9 +498,8 @@ public class TestAntiAlignment {
 		return new MarkedNet(petrinet, initialMarking, finalMarking);
 	}
 
-	public static void printAntiAlignments(String model, AntiAlignments aa,
-			short[][] log, int[] frequencies, int[] newStateCount,
-			double[] recDistances, String[] short2label, boolean printHeader) {
+	public static void printAntiAlignments(String model, AntiAlignments aa, short[][] log, int[] frequencies,
+			int[] newStateCount, double[] recDistances, String[] short2label, boolean printHeader) {
 		// Depth first search concluded. Let's report:
 		if (printHeader) {
 			System.out
@@ -741,8 +534,7 @@ public class TestAntiAlignment {
 			if (aa.getAAForLogWithoutTrace(t) == null) {
 				System.out.print("none");
 			} else {
-				System.out.print(toString(aa.getAAForLogWithoutTrace(t),
-						short2label));
+				System.out.print(toString(aa.getAAForLogWithoutTrace(t), short2label));
 			}
 			System.out.print("\t");
 			System.out.print(aa.getAADistanceForLogWithoutTrace(t));
@@ -756,8 +548,7 @@ public class TestAntiAlignment {
 			if (aa.getAAFiringSequenceForLogWithoutTrace(t) == null) {
 				System.out.print("none");
 			} else {
-				System.out.print(aa.getAAFiringSequenceForLogWithoutTrace(t)
-						.toString());
+				System.out.print(aa.getAAFiringSequenceForLogWithoutTrace(t).toString());
 			}
 			System.out.println();
 
