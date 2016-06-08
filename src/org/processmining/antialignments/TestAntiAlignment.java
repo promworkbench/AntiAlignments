@@ -79,7 +79,7 @@ public class TestAntiAlignment {
 
 				if (!verbose) {
 					System.out.println("Log: " + logfile);
-					System.out.println("model\tFw\tP_t^u\tG_t^w\tP_l^u\tG_l^w");
+					System.out.println("model\tFw\tP_t^u\tP_l^u\tP\tG_t^w\tG_l^w\tG");
 				}
 				for (File f : new File(path).listFiles()) {
 					if (f.getName().endsWith(".tpn")) {
@@ -129,8 +129,8 @@ public class TestAntiAlignment {
 		//		new XesXmlGZIPSerializer().serialize(xLog, out);
 		//		out.close();
 
-		AntiAlignmentValues result = AntiAlignmentPlugin.basicCodeStructureWithoutAlignments(markedNet.net, markedNet.initialMarking,
-				markedNet.finalMarking, xLog);
+		AntiAlignmentValues result = AntiAlignmentPlugin.basicCodeStructureWithoutAlignments(markedNet.net,
+				markedNet.initialMarking, markedNet.finalMarking, xLog);
 
 		if (!verbose) {
 			System.out.print(result.getFitness());
@@ -148,7 +148,7 @@ public class TestAntiAlignment {
 			System.out.print(result.getGeneralization());
 			System.out.println();
 		}
-		
+
 		//		int[] frequencies = new int[xLog.size()];
 		//
 		//		TObjectShortMap<String> label2short = new TObjectShortHashMap<>(

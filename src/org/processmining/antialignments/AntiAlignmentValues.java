@@ -13,8 +13,8 @@ public class AntiAlignmentValues implements HTMLToString {
 	private final double generalizationLog;
 	private final double generalizationTrace;
 
-	public AntiAlignmentValues(double alpha, double fitness, double precisionLog, double precisionTrace,
-			double generalizationLog, double generalizationTrace) {
+	public AntiAlignmentValues(double alpha, double fitness, double precisionTrace, double precisionLog,
+			double generalizationTrace, double generalizationLog) {
 		this.alpha = alpha;
 		this.fitness = fitness;
 		this.precisionLog = precisionLog;
