@@ -1,9 +1,5 @@
 package org.processmining.antialignments.pathfinder;
 
-import gnu.trove.map.TObjectIntMap;
-import gnu.trove.map.TObjectShortMap;
-import gnu.trove.map.hash.TObjectIntHashMap;
-
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -17,6 +13,10 @@ import org.processmining.models.semantics.IllegalTransitionException;
 import org.processmining.models.semantics.petrinet.Marking;
 import org.processmining.models.semantics.petrinet.PetrinetSemantics;
 import org.processmining.models.semantics.petrinet.impl.PetrinetSemanticsFactory;
+
+import gnu.trove.map.TObjectIntMap;
+import gnu.trove.map.TObjectShortMap;
+import gnu.trove.map.hash.TObjectIntHashMap;
 
 public class AntiAlignmentFinder {
 
@@ -46,7 +46,7 @@ public class AntiAlignmentFinder {
 	protected Map<State, State> toDoSet = new HashMap<State, State>();
 	protected TObjectIntMap<State> stateMap = new TObjectIntHashMap<State>();
 
-	protected PriorityQueue<State> toDo = new PriorityQueue<>(
+	protected PriorityQueue<State> toDo = new PriorityQueue<State>(1024,
 			new Comparator<State>() {
 
 				@Override

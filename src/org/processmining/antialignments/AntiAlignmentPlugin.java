@@ -1,22 +1,11 @@
 package org.processmining.antialignments;
 
-import gnu.trove.list.TShortList;
-import gnu.trove.list.array.TShortArrayList;
-import gnu.trove.map.TObjectShortMap;
-import gnu.trove.map.TShortObjectMap;
-import gnu.trove.map.hash.TObjectShortHashMap;
-import gnu.trove.map.hash.TShortObjectHashMap;
-import gnu.trove.set.TShortSet;
-import gnu.trove.set.hash.TShortHashSet;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Vector;
-
-import nl.tue.astar.AStarException;
 
 import org.deckfour.xes.classification.XEventClass;
 import org.deckfour.xes.model.XLog;
@@ -42,6 +31,16 @@ import org.processmining.plugins.petrinet.replayer.PNLogReplayer;
 import org.processmining.plugins.petrinet.replayresult.PNRepResult;
 import org.processmining.plugins.petrinet.replayresult.StepTypes;
 import org.processmining.plugins.replayer.replayresult.SyncReplayResult;
+
+import gnu.trove.list.TShortList;
+import gnu.trove.list.array.TShortArrayList;
+import gnu.trove.map.TObjectShortMap;
+import gnu.trove.map.TShortObjectMap;
+import gnu.trove.map.hash.TObjectShortHashMap;
+import gnu.trove.map.hash.TShortObjectHashMap;
+import gnu.trove.set.TShortSet;
+import gnu.trove.set.hash.TShortHashSet;
+import nl.tue.astar.AStarException;
 
 @Plugin(name = "Anti-Alignment Precision/Generalization", level = PluginLevel.NightlyBuild, //
 returnLabels = { "Anti-alignment-based Precision/Generalization" }, returnTypes = { AntiAlignmentValues.class },//
@@ -410,7 +409,9 @@ public class AntiAlignmentPlugin {
 
 		for (short i = 0; i < firingSequences.length; i++) {
 			semantics.setCurrentState(initialMarking);
-			map.putIfAbsent(initialMarking, new TShortHashSet(firingSequences.length, 0.75f, Short.MIN_VALUE));
+			if (!map.containsKey(initialMarking)) {
+				map.put(initialMarking, new TShortHashSet(firingSequences.length, 0.75f, Short.MIN_VALUE));
+			}
 			map.get(initialMarking).add(i);
 			for (Transition t : firingSequences[i]) {
 				try {
@@ -418,8 +419,10 @@ public class AntiAlignmentPlugin {
 				} catch (IllegalTransitionException e) {
 					e.printStackTrace();
 				}
-				map.putIfAbsent(semantics.getCurrentState(), new TShortHashSet(firingSequences.length, 0.75f,
+				if (!map.containsKey(semantics.getCurrentState())) {
+					map.put(semantics.getCurrentState(), new TShortHashSet(firingSequences.length, 0.75f,
 						Short.MIN_VALUE));
+				}
 				map.get(semantics.getCurrentState()).add(i);
 			}
 		}
