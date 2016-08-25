@@ -145,10 +145,14 @@ public class AntiAlignmentPlugin {
 		int maxFactor = 1;
 		max *= 2 * maxFactor;
 		long start = System.nanoTime();
+
 		AntiAlignments aa = new DepthFirstTraceSearch(net, initialMarking, finalMarking, label2short)
-				.getAntiAlignments(alignedLog, max, maxFactor, new DistanceMetric.Hamming());
+				.getAntiAlignments(alignedLog, max, maxFactor, new DistanceMetric.Edit());
+
 		long mid = System.nanoTime();
-		AntiAlignments aa2 = calculator.getAntiAlignments(alignedLog, max,  maxFactor);
+
+		AntiAlignments aa2 = calculator.getAntiAlignments(alignedLog, max, maxFactor);
+
 		long end = System.nanoTime();
 
 		System.out.println("old: " + (mid - start) / 1000000.0);

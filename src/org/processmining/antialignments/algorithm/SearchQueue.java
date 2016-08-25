@@ -21,6 +21,7 @@ import org.apache.commons.collections15.list.TreeList;
  */
 public class SearchQueue<S extends State> implements Iterable<S> {
 
+	private static final int INITIALSIZE = 1024;
 	//For now, just use a LinkedList of states, sorted by Marking.
 	private TreeList<S> states = new TreeList<>();
 	// nextElement stores the relative index of the next element in an iteration order
@@ -31,8 +32,8 @@ public class SearchQueue<S extends State> implements Iterable<S> {
 
 	public SearchQueue() {
 		// initialize the nextElement array to some size;
-		nextElement = new int[10];
-		pathDistances = new int[10];
+		nextElement = new int[INITIALSIZE];
+		pathDistances = new int[INITIALSIZE];
 		startAt = -1;
 	}
 
@@ -140,13 +141,17 @@ public class SearchQueue<S extends State> implements Iterable<S> {
 			}
 			pathDistances[i - 1] = pathDistances[i];
 		}
-		// possibly schrink the array, making sure it has 33% free space after shrinking
-		if (states.size() < nextElement.length / 3) {
-			// grow array.
-			int[] newNextElement = new int[nextElement.length / 2];
+		// possibly shrink the array, making sure it has 33% free space after shrinking
+		if (states.size() < nextElement.length / 3 && nextElement.length > INITIALSIZE) {
+			// shrink array.
+			int size = nextElement.length / 2;
+			if (size < INITIALSIZE) {
+				size = INITIALSIZE;
+			}
+			int[] newNextElement = new int[size];
 			System.arraycopy(nextElement, 0, newNextElement, 0, states.size());
 			nextElement = newNextElement;
-			int[] newPathDistances = new int[pathDistances.length / 2];
+			int[] newPathDistances = new int[size];
 			System.arraycopy(pathDistances, 0, newPathDistances, 0, states.size());
 			pathDistances = newPathDistances;
 		}

@@ -6,31 +6,29 @@ import java.util.Arrays;
 import org.processmining.models.graphbased.directed.petrinet.elements.Transition;
 import org.processmining.models.semantics.petrinet.Marking;
 
-/**
- * A state is a pair of a marking and a row in the edit-distance matrix.
- * 
- * A state has a predecessor state (or null if it is the intial state)
- * 
- * @author bfvdonge
- * 
- */
-public class HammingState extends AbstractState {
+public class EditDistanceState extends AbstractState {
 
-	protected final short[] vector;
+	protected final short[][] vector;
 	protected short minimumDistance;
 	protected short length;
 
 	/**
 	 * Constructs the initial state
 	 */
-	public HammingState(Marking marking, int logSize) {
+	public EditDistanceState(Marking marking, short[][] log) {
 		super(marking);
-		this.vector = new short[logSize];
-		this.minimumDistance = 0;
+		this.vector = new short[log.length][];
+		for (int t = 0; t < log.length; t++) {
+			this.vector[t] = new short[log[t].length];
+			for (int e = 0; e < log[t].length; e++) {
+				this.vector[t][e] = (short) (e + 1);
+			}
+		}
 		this.length = 0;
+		this.minimumDistance = 0;
 	}
 
-	private HammingState(Marking marking, HammingState predecessor, short[] vector, short minimumDistance,
+	private EditDistanceState(Marking marking, EditDistanceState predecessor, short[][] vector, short minimumDistance,
 			short length, Transition executedTransition, short executedLabel) {
 		super(marking, predecessor, executedTransition, executedLabel);
 		this.vector = vector;
@@ -47,47 +45,65 @@ public class HammingState extends AbstractState {
 	 * .processmining.models.graphbased.directed.petrinet.elements.Transition)
 	 */
 	@Override
-	public HammingState getNextState(Marking newMarking, final short[][] log, final int traceToIgnore,
+	public EditDistanceState getNextState(Marking newMarking, final short[][] log, final int traceToIgnore,
 			short executedLabel, Transition executedTransition) {
-		short[] newVector = new short[vector.length];
-		short newLength = length;
-		short newMinimumDistance = minimumDistance;
+		short[][] newVector;
 
+		short newLength = length;
+		short newMinDistance = minimumDistance;
 		if (executedLabel == NOLABEL) {
-			// invisible transition, 
-			for (int i = newVector.length; i-- > 0;) {
-				newVector[i] = vector[i];
-			}
+			// invisible transition,
+			newVector = vector; // POINTERS are ok here as the previous state won't change.
 		} else {
+			newVector = new short[vector.length][];
 			// store the length of the backtrace
 			newLength = (short) (length + 1);
 			// store the minimum
-			newMinimumDistance = Short.MAX_VALUE;
+			newMinDistance = Short.MAX_VALUE;
+
 			for (int t = 0; t < log.length; t++) {
-				if (length < log[t].length && log[t][length] == executedLabel) {
-					// Match
-					newVector[t] = vector[t];
+				newVector[t] = new short[log[t].length];
+				if (log[t][0] == executedLabel) {
+					newVector[t][0] = length;
 				} else {
-					// no match or passed trace t's length				
-					newVector[t] = (short) (vector[t] + 1);
+					newVector[t][0] = newLength;
+					if (vector[t][0] < length) {
+						newVector[t][0] = (short) (vector[t][0] + 1);
+					}
 				}
-				// Keep track of the minimum value in the last element of the vector.
+				for (int e = 1; e < log[t].length; e++) {
+					if (log[t][e] == executedLabel) {
+						newVector[t][e] = vector[t][e - 1];
+					} else {
+						newVector[t][e] = (short) (newVector[t][e - 1] + 1);
+						if (vector[t][e - 1] < newVector[t][e - 1]) {
+							newVector[t][e] = (short) (vector[t][e - 1] + 1);
+						}
+						if (vector[t][e] < vector[t][e - 1] && vector[t][e] < newVector[t][e - 1]) {
+							newVector[t][e] = (short) (vector[t][e - 1] + 1);
+
+						}
+					}
+				}
+				// Keep track of the minimum value
 				// over all traces nog equal to traceToIgnore.
-				if (t != traceToIgnore && newVector[t] < newMinimumDistance) {
-					newMinimumDistance = newVector[t];
+				short distTrace = newVector[t][Math.min(log[t].length - 1, length)];
+				if (t != traceToIgnore && distTrace < newMinDistance) {
+					newMinDistance = distTrace;
 				}
 			}
+
 		}
 
-		return new HammingState(newMarking, this, newVector, newMinimumDistance, newLength, executedTransition,
+		return new EditDistanceState(newMarking, this, newVector, newMinDistance, newLength, executedTransition,
 				executedLabel);
 
 	}
 
 	public boolean equals(Object o) {
-		if (o instanceof HammingState) {
-			HammingState s = (HammingState) o;
-			return s.marking.equals(marking) && length == s.length && Arrays.equals(s.vector, vector);
+		if (o instanceof EditDistanceState) {
+			EditDistanceState s = (EditDistanceState) o;
+			return s.marking.equals(marking) && Arrays.equals(s.vector, vector);
 		} else {
 			return false;
 		}
@@ -102,7 +118,7 @@ public class HammingState extends AbstractState {
 	 */
 	@Override
 	public boolean hasSameMarkingAs(State s) {
-		return s instanceof HammingState && marking.equals(((HammingState) s).marking);
+		return s instanceof EditDistanceState && marking.equals(((EditDistanceState) s).marking);
 	}
 
 	/*
@@ -114,19 +130,21 @@ public class HammingState extends AbstractState {
 	 */
 	@Override
 	public boolean isGreaterOrEqual(State s) {
-		if (!(s instanceof HammingState) || length != ((HammingState) s).length) {
+		if (!(s instanceof EditDistanceState) || length != ((EditDistanceState) s).length) {
 			return false;
 		}
-		for (int i = 1; i < vector.length - 1; i++) {
-			if (vector[i] < ((HammingState) s).vector[i]) {
-				return false;
+		for (int t = 0; t < vector.length - 1; t++) {
+			for (int e = 0; e < vector[t].length && e < length; e++) {
+				if (vector[t][e] < ((EditDistanceState) s).vector[t][e]) {
+					return false;
+				}
 			}
 		}
 		return true;
 	}
 
 	public int hashCode() {
-		return marking.hashCode() + 31 * Arrays.hashCode(vector) + 31 * 31 * length;
+		return marking.hashCode() + 31 * Arrays.hashCode(vector) + 31 * 31 * length + 31 * 31 * 31 * minimumDistance;
 	}
 
 	/*
@@ -148,7 +166,7 @@ public class HammingState extends AbstractState {
 	 */
 	@Override
 	public int getDistance(short[][] log, int trace) {
-		return vector[trace] + (log[trace].length > length ? log[trace].length - length : 0);
+		return minimumDistance + (log[trace].length > length ? log[trace].length - length : 0);
 	}
 
 	public int getPathDistance() {
@@ -157,22 +175,19 @@ public class HammingState extends AbstractState {
 
 	public void setFinalMarkingReached(short[][] log, int traceToIgnore) {
 		short min = Short.MAX_VALUE;
-		short maxDist = 0;
+		short maxLength = 0;
 		for (int t = 0; t < log.length; t++) {
-			short dist = (short) (log[t].length - vector[t]);
-			if (dist > 0) {
-				// some trailing tau steps are needed
-				vector[t] += dist;
+
+			if (t != traceToIgnore && log[t].length > maxLength) {
+				maxLength = (short) log[t].length;
 			}
-			if (dist > maxDist) {
-				maxDist = dist;
-			}
-			if (t != traceToIgnore && vector[t] < min) {
-				min = vector[t];
+
+			if (t != traceToIgnore && vector[t][log[t].length - 1] < min) {
+				min = vector[t][log[t].length - 1];
 			}
 		}
 		// update the path length
-		length += maxDist;
+		length = maxLength;
 		// update the minimal value
 		minimumDistance = min;
 	}
@@ -184,7 +199,8 @@ public class HammingState extends AbstractState {
 
 	public String toString() {
 		return (executedTransition == null || executedTransition.isInvisible() ? "." : executedTransition.getLabel())
-				+ ": " + marking.toString() + " " + Arrays.toString(vector) + " l:" + length + " d:" + minimumDistance;
+				+ ": " + marking.toString() + " " + Arrays.deepToString(vector) + " l:" + length + " d:"
+				+ minimumDistance;
 	}
 
 	@Override
@@ -200,8 +216,7 @@ public class HammingState extends AbstractState {
 			out.print(" ");
 		}
 		out.print(": ");
-		out.println(Arrays.toString(vector));
+		out.println(Arrays.deepToString(vector));
 
 	}
-
 }

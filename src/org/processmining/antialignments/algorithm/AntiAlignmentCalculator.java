@@ -44,7 +44,8 @@ public class AntiAlignmentCalculator {
 				max = log[t].length;
 			}
 		}
-		HammingState initialState = new HammingState(initialMarking, log.length);
+		//		State initialState = new HammingState(initialMarking, log.length);
+		State initialState = new EditDistanceState(initialMarking, log);
 
 		short i = 0;
 		TObjectShortMap<Transition> trans2short = new TObjectShortHashMap<>(net.getTransitions().size() * 2, 0.7f,
@@ -64,9 +65,12 @@ public class AntiAlignmentCalculator {
 			int length = traceToIgnore < log.length ? log[traceToIgnore].length * maxFactor : maxLength * maxFactor;
 
 			// Initialize the initial generation (note that initialMarking may be the final Marking
-			SearchQueue<HammingState> current = new SearchQueue<HammingState>();
+			SearchQueue<State> current = new SearchQueue<State>();
 			current.add(initialState);
 
+			if (VERBOSE) {
+				System.out.println("Looking for anti alignment of maximum length: " + length);
+			}
 			State finalState = null;
 			do {
 				finalState = update(current, log, traceToIgnore, length);
