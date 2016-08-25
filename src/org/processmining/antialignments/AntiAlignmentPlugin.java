@@ -1,14 +1,27 @@
 package org.processmining.antialignments;
 
+import gnu.trove.list.TShortList;
+import gnu.trove.list.array.TShortArrayList;
+import gnu.trove.map.TObjectShortMap;
+import gnu.trove.map.TShortObjectMap;
+import gnu.trove.map.hash.TObjectShortHashMap;
+import gnu.trove.map.hash.TShortObjectHashMap;
+import gnu.trove.set.TShortSet;
+import gnu.trove.set.hash.TShortHashSet;
+
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Vector;
 
+import nl.tue.astar.AStarException;
+
 import org.deckfour.xes.classification.XEventClass;
 import org.deckfour.xes.model.XLog;
+import org.processmining.antialignments.algorithm.AntiAlignmentCalculator;
 import org.processmining.antialignments.pathfinder.AntiAlignments;
 import org.processmining.contexts.uitopia.UIPluginContext;
 import org.processmining.contexts.uitopia.annotations.UITopiaVariant;
@@ -31,16 +44,6 @@ import org.processmining.plugins.petrinet.replayer.PNLogReplayer;
 import org.processmining.plugins.petrinet.replayresult.PNRepResult;
 import org.processmining.plugins.petrinet.replayresult.StepTypes;
 import org.processmining.plugins.replayer.replayresult.SyncReplayResult;
-
-import gnu.trove.list.TShortList;
-import gnu.trove.list.array.TShortArrayList;
-import gnu.trove.map.TObjectShortMap;
-import gnu.trove.map.TShortObjectMap;
-import gnu.trove.map.hash.TObjectShortHashMap;
-import gnu.trove.map.hash.TShortObjectHashMap;
-import gnu.trove.set.TShortSet;
-import gnu.trove.set.hash.TShortHashSet;
-import nl.tue.astar.AStarException;
 
 @Plugin(name = "Anti-Alignment Precision/Generalization", level = PluginLevel.NightlyBuild, //
 returnLabels = { "Anti-alignment-based Precision/Generalization" }, returnTypes = { AntiAlignmentValues.class },//
@@ -136,13 +139,23 @@ public class AntiAlignmentPlugin {
 		int max = rebuildLogFromAlignments(alignments, mapping, frequencies, alignedLog, firingSequences, label2short,
 				short2label);
 
+		AntiAlignmentCalculator calculator = new AntiAlignmentCalculator(net, initialMarking, finalMarking, label2short);
+
 		// Start anti-alignment computation
 		int maxFactor = 1;
 		max *= 2 * maxFactor;
 		long start = System.nanoTime();
 		AntiAlignments aa = new DepthFirstTraceSearch(net, initialMarking, finalMarking, label2short)
-				.getAntiAlignments(alignedLog, max, maxFactor, new DistanceMetric.Edit());
+				.getAntiAlignments(alignedLog, max, maxFactor, new DistanceMetric.Hamming());
 		long mid = System.nanoTime();
+		AntiAlignments aa2 = calculator.getAntiAlignments(alignedLog, max,  maxFactor);
+		long end = System.nanoTime();
+
+		System.out.println("old: " + (mid - start) / 1000000.0);
+		System.out.println("new: " + (end - mid) / 1000000.0);
+
+		System.out.println("old: " + Arrays.toString(aa.getMaxMinDistances()));
+		System.out.println("new: " + Arrays.toString(aa2.getMaxMinDistances()));
 
 		double[] weightedPrecision = computePrecision(aa, alignedLog, frequencies, max, maxFactor);
 		double[] unweightedPrecision = computePrecision(aa, alignedLog, null, max, maxFactor);
@@ -421,7 +434,7 @@ public class AntiAlignmentPlugin {
 				}
 				if (!map.containsKey(semantics.getCurrentState())) {
 					map.put(semantics.getCurrentState(), new TShortHashSet(firingSequences.length, 0.75f,
-						Short.MIN_VALUE));
+							Short.MIN_VALUE));
 				}
 				map.get(semantics.getCurrentState()).add(i);
 			}

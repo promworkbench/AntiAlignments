@@ -15,7 +15,7 @@ public interface DistanceMetric {
 					d++;
 				}
 			}
-			return d;
+			return d + Math.abs(trace.length - word.length);
 		}
 	}
 
