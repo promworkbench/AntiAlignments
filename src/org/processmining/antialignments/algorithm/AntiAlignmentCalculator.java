@@ -17,7 +17,7 @@ import org.processmining.models.semantics.petrinet.impl.PetrinetSemanticsFactory
 
 public class AntiAlignmentCalculator {
 
-	protected final static boolean VERBOSE = true;
+	protected final static boolean VERBOSE = false;
 
 	private final Petrinet net;
 	private final Marking initialMarking;

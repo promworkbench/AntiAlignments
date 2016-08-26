@@ -184,7 +184,8 @@ public class HammingState extends AbstractState {
 
 	public String toString() {
 		return (executedTransition == null || executedTransition.isInvisible() ? "." : executedTransition.getLabel())
-				+ ": " + marking.toString() + " " + Arrays.toString(vector) + " l:" + length + " d:" + minimumDistance;
+				+ ": " + marking.toString() + " " + Arrays.toString(vector) + " l:" + length + " d:"
+				+ getPathDistance();
 	}
 
 	@Override

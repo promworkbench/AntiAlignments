@@ -9,7 +9,15 @@ import org.processmining.models.semantics.petrinet.Marking;
 public class EditDistanceState extends AbstractState {
 
 	protected final short[][] vector;
+
+	/*
+	 * MinimumDistance, in this EditDistanceState, stores an UNDERESTIMATE of
+	 * the edit distance after completing this anti-alignment. In terms of A*,
+	 * it stores the value of f(), so not g() or h() as they may both be
+	 * unknown.
+	 */
 	protected short minimumDistance;
+
 	protected short length;
 
 	/**
@@ -87,13 +95,29 @@ public class EditDistanceState extends AbstractState {
 				}
 				// Keep track of the minimum value
 				// over all traces nog equal to traceToIgnore.
-				short distTrace = newVector[t][Math.min(log[t].length - 1, length)];
+				short distTrace;
+				if (log[t].length > length) {
+					// the current anti-alignment length is still smaller than
+					// the length of the trace
+					// the edit distance cannot become less than the current
+					// value of newVector[t][length], hence this provides an
+					// UNDERESTIMATE of the edit distance and can be used for
+					// scheduling. The actual distance so-far is UNKNOWN
+					distTrace = newVector[t][length];
+				} else {
+					// the current anti-alignment length is larger than the
+					// length of the trace. 
+					// Now we KNOW the edit distance.
+					distTrace = (short) (newVector[t][log[t].length - 1]);// + length - log[t].length);
+
+				}
 				if (t != traceToIgnore && distTrace < newMinDistance) {
 					newMinDistance = distTrace;
 				}
 			}
 
 		}
+		assert newLength >= newMinDistance;
 
 		return new EditDistanceState(newMarking, this, newVector, newMinDistance, newLength, executedTransition,
 				executedLabel);
@@ -133,7 +157,7 @@ public class EditDistanceState extends AbstractState {
 		if (!(s instanceof EditDistanceState) || length != ((EditDistanceState) s).length) {
 			return false;
 		}
-		for (int t = 0; t < vector.length - 1; t++) {
+		for (int t = 0; t < vector.length; t++) {
 			for (int e = 0; e < vector[t].length && e < length; e++) {
 				if (vector[t][e] < ((EditDistanceState) s).vector[t][e]) {
 					return false;
@@ -169,27 +193,41 @@ public class EditDistanceState extends AbstractState {
 		return minimumDistance + (log[trace].length > length ? log[trace].length - length : 0);
 	}
 
+	// Since minimumdistance is an UNDERESTIMATE of the edit distance so far,
 	public int getPathDistance() {
 		return length - minimumDistance;
 	}
 
 	public void setFinalMarkingReached(short[][] log, int traceToIgnore) {
 		short min = Short.MAX_VALUE;
-		short maxLength = 0;
+		short maxLength = length;
 		for (int t = 0; t < log.length; t++) {
+
+			short traceDistance;
+			short aaLength;
+			if (length < log[t].length) {
+				// the anti-alignment is done, but there are events left in 
+				// trace t. 
+				traceDistance = vector[t][log[t].length - 1];
+			} else {
+				// the anti-alignment is longer than the trace
+				traceDistance = vector[t][log[t].length - 1];
+
+			}
 
 			if (t != traceToIgnore && log[t].length > maxLength) {
 				maxLength = (short) log[t].length;
 			}
 
-			if (t != traceToIgnore && vector[t][log[t].length - 1] < min) {
-				min = vector[t][log[t].length - 1];
+			if (t != traceToIgnore && traceDistance < min) {
+				min = traceDistance;
 			}
 		}
 		// update the path length
 		length = maxLength;
 		// update the minimal value
 		minimumDistance = min;
+		assert length >= minimumDistance;
 	}
 
 	@Override
@@ -200,7 +238,7 @@ public class EditDistanceState extends AbstractState {
 	public String toString() {
 		return (executedTransition == null || executedTransition.isInvisible() ? "." : executedTransition.getLabel())
 				+ ": " + marking.toString() + " " + Arrays.deepToString(vector) + " l:" + length + " d:"
-				+ minimumDistance;
+				+ getPathDistance();
 	}
 
 	@Override

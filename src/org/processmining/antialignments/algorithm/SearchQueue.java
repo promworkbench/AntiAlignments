@@ -1,6 +1,8 @@
 package org.processmining.antialignments.algorithm;
 
+import java.util.HashSet;
 import java.util.Iterator;
+import java.util.Set;
 
 import org.apache.commons.collections15.list.TreeList;
 
@@ -35,6 +37,8 @@ public class SearchQueue<S extends State> implements Iterable<S> {
 		nextElement = new int[INITIALSIZE];
 		pathDistances = new int[INITIALSIZE];
 		startAt = -1;
+		added = 0;
+		removed = 0;
 	}
 
 	public boolean add(S s) {
@@ -105,11 +109,18 @@ public class SearchQueue<S extends State> implements Iterable<S> {
 		return true;
 	}
 
+	private static int removed = 0;
+
 	private void updateAfterRemoval(int removedAt) {
+		removed++;
 		int oldSize = states.size() + 1;
 		int oldRemoveAtPointer = nextElement[removedAt];
+		int oldStartAt = startAt;
 		if (startAt == removedAt) {
-			startAt = removedAt + oldRemoveAtPointer - 1;
+			startAt = (removedAt + oldRemoveAtPointer) % oldSize;
+			if (startAt >= removedAt) {
+				startAt--;
+			}
 		} else if (startAt > removedAt) {
 			startAt--;
 		}
@@ -119,7 +130,15 @@ public class SearchQueue<S extends State> implements Iterable<S> {
 				nextElement[i]--;
 			} else if (i + nextElement[i] == removedAt) {
 				// points to the removed element, take new pointer
-				nextElement[i] += oldRemoveAtPointer - 1;
+				nextElement[i] = (nextElement[i] + oldRemoveAtPointer - 1) % states.size();
+				if (i + nextElement[i] > states.size() && pathDistances[i + nextElement[i]] == pathDistances[i]) {
+					// swap [i] and [i+nextElement[i]%states.size()]
+					int j = (i + nextElement[i]) % states.size();
+					assert j < i;
+					int tmp = nextElement[j];
+					nextElement[j] = i - j;
+					nextElement[i] = tmp - nextElement[j];
+				}
 			}
 		}
 		for (int i = removedAt + 1; i < oldSize; i++) {
@@ -155,11 +174,14 @@ public class SearchQueue<S extends State> implements Iterable<S> {
 			System.arraycopy(pathDistances, 0, newPathDistances, 0, states.size());
 			pathDistances = newPathDistances;
 		}
-		assert isEmpty() || startAt >= 0;
+		assert isConsistent();
 
 	}
 
+	static int added = 0;
+
 	private void updateAfterAdding(int addedAt, int addedPathDistance) {
+		added++;
 		int oldSize = states.size() - 1;
 		if (states.size() > nextElement.length) {
 			// grow array by 50%
@@ -173,7 +195,7 @@ public class SearchQueue<S extends State> implements Iterable<S> {
 
 		int predecessor = -1;
 		int nextPre = 0;
-		for (int i = addedAt - 1; i-- > 0;) {
+		for (int i = addedAt; i-- > 0;) {
 			if (pathDistances[i] <= addedPathDistance
 					&& (predecessor == -1 || pathDistances[i] > pathDistances[predecessor])) {
 				// found closest predecessor with same path distance.
@@ -187,24 +209,27 @@ public class SearchQueue<S extends State> implements Iterable<S> {
 			}
 		}
 		for (int i = states.size(); i-- > addedAt + 1;) {
-			if (i - 1 + nextElement[i - 1] > oldSize + addedAt) {
-				// points passed the removed element, increase by 1 and move down one index
+			if (i - 1 + nextElement[i - 1] >= oldSize + addedAt) {
+				// points passed the removed element, increase by 1 and move down up index
 				nextElement[i] = nextElement[i - 1] + 1;
 			} else {
-				// simply move down one index
+				// simply move up one index
 				nextElement[i] = nextElement[i - 1];
 			}
 			pathDistances[i] = pathDistances[i - 1];
-			if (pathDistances[i] < addedPathDistance
+			if (pathDistances[i] < addedPathDistance && i > predecessor
 					&& (predecessor == -1 || pathDistances[i] >= pathDistances[predecessor])) {
 				// found closest predecessor with same path distance.
 				// points to the removed element, take new pointer
 				predecessor = i;
-				nextPre = nextElement[i - 1];
+				nextPre = nextElement[i];
 			}
 		}
 		// predecessor becomes my predecessor.
 		pathDistances[addedAt] = addedPathDistance;
+		if (startAt >= addedAt) {
+			startAt++;
+		}
 		if (predecessor == -1) {
 			// smallest element, i.e. head of the queue
 			if (startAt == -1) {
@@ -213,33 +238,25 @@ public class SearchQueue<S extends State> implements Iterable<S> {
 				startAt = 0;
 			} else {
 				// size is now > 1
-				nextElement[addedAt] = startAt < addedAt ? states.size() - (addedAt - startAt) : startAt - addedAt + 1;
+				nextElement[addedAt] = startAt < addedAt ? states.size() - (addedAt - startAt) : startAt - addedAt;
 				startAt = addedAt;
 			}
 		} else {
-			if (startAt >= addedAt) {
-				startAt++;
-			}
 			if (nextPre == 0) {
-
 				// predecessor was last element in the queue
-				if (predecessor < addedAt) {
-					nextElement[addedAt] = 0;
-					nextElement[predecessor] = addedAt - predecessor;
-				} else {
-					nextElement[addedAt] = 0;
-					nextElement[predecessor] = predecessor - addedAt;
-				}
-			} else if (predecessor < addedAt) {
-				// predecessor is before in the list
-				nextElement[addedAt] = nextElement[predecessor] - (addedAt - predecessor);
-				nextElement[predecessor] = addedAt - predecessor;
+				nextElement[addedAt] = 0;
+				// now point the predecessor to addedAt
+				nextElement[predecessor] = (states.size() + (addedAt - predecessor)) % states.size();
 			} else {
-				// predecessor is later in the list
-				nextElement[addedAt] = predecessor - addedAt;
-				nextElement[predecessor] = nextElement[predecessor] - (predecessor - addedAt);
+				// point addedAt to nextPre.
+				nextElement[addedAt] = (states.size() + (predecessor + nextElement[predecessor]) - addedAt)
+						% states.size();
+				// now point the predecessor to addedAt
+				nextElement[predecessor] = (states.size() + (addedAt - predecessor)) % states.size();
 			}
+
 		}
+		assert isConsistent();
 	}
 
 	public S getFirst() {
@@ -281,6 +298,7 @@ public class SearchQueue<S extends State> implements Iterable<S> {
 		public S next() {
 			int oldNext = next;
 			if (queue.nextElement[next] != 0) {
+				assert queue.nextElement[next] > 0;
 				next = ((next + queue.nextElement[next]) % queue.states.size());
 			} else {
 				next = -1;
@@ -291,6 +309,44 @@ public class SearchQueue<S extends State> implements Iterable<S> {
 		public void remove() {
 			throw new UnsupportedOperationException("Cannot remove from SearchQueue trough iterator");
 		}
+
+	}
+
+	private boolean isConsistent() {
+		boolean c = true;
+		if (states.isEmpty()) {
+			c &= startAt == -1;
+			assert c;
+		} else {
+			c &= startAt >= 0;
+			assert c;
+			c &= startAt < states.size();
+			assert c;
+		}
+		boolean oneZero = false;
+		for (int i = 0; i < states.size(); i++) {
+			c &= nextElement[i] > 0 || (!oneZero && nextElement[i] == 0);
+			oneZero = nextElement[i] == 0;
+			assert c;
+		}
+		for (int i = 0; i < states.size(); i++) {
+			if (i + nextElement[i] < states.size()) {
+				c &= pathDistances[i + nextElement[i]] >= pathDistances[i];
+				assert c;
+			} else {
+				c &= pathDistances[i + nextElement[i] - states.size()] > pathDistances[i];
+				assert c;
+			}
+		}
+		Set<S> seen = new HashSet<S>();
+		Iterator<S> it = iterator();
+		while (c && it.hasNext()) {
+			c &= seen.add(it.next());
+			assert c;
+		}
+		c &= seen.size() == states.size();
+		assert c;
+		return c;
 
 	}
 

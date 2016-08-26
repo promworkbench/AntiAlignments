@@ -17,11 +17,12 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Vector;
 
+import lpsolve.LpSolveException;
 import nl.tue.astar.AStarException;
 
 import org.deckfour.xes.classification.XEventClass;
 import org.deckfour.xes.model.XLog;
-import org.processmining.antialignments.algorithm.AntiAlignmentCalculator;
+import org.processmining.antialignments.algorithm.AntiAlignmentILPCalculator;
 import org.processmining.antialignments.pathfinder.AntiAlignments;
 import org.processmining.contexts.uitopia.UIPluginContext;
 import org.processmining.contexts.uitopia.annotations.UITopiaVariant;
@@ -139,7 +140,9 @@ public class AntiAlignmentPlugin {
 		int max = rebuildLogFromAlignments(alignments, mapping, frequencies, alignedLog, firingSequences, label2short,
 				short2label);
 
-		AntiAlignmentCalculator calculator = new AntiAlignmentCalculator(net, initialMarking, finalMarking, label2short);
+		//		AntiAlignmentCalculator calculator = new AntiAlignmentCalculator(net, initialMarking, finalMarking, label2short);
+		AntiAlignmentILPCalculator calculator2 = new AntiAlignmentILPCalculator(net, initialMarking, finalMarking,
+				label2short);
 
 		// Start anti-alignment computation
 		int maxFactor = 1;
@@ -151,7 +154,14 @@ public class AntiAlignmentPlugin {
 
 		long mid = System.nanoTime();
 
-		AntiAlignments aa2 = calculator.getAntiAlignments(alignedLog, max, maxFactor);
+		//		AntiAlignments aa2 = calculator.getAntiAlignments(alignedLog, max, maxFactor);
+		AntiAlignments aa3 = null;
+		try {
+			aa3 = calculator2.getAntiAlignments(alignedLog, max, maxFactor);
+		} catch (LpSolveException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 
 		long end = System.nanoTime();
 
@@ -159,7 +169,7 @@ public class AntiAlignmentPlugin {
 		System.out.println("new: " + (end - mid) / 1000000.0);
 
 		System.out.println("old: " + Arrays.toString(aa.getMaxMinDistances()));
-		System.out.println("new: " + Arrays.toString(aa2.getMaxMinDistances()));
+		System.out.println("new: " + Arrays.toString(aa3.getMaxMinDistances()));
 
 		double[] weightedPrecision = computePrecision(aa, alignedLog, frequencies, max, maxFactor);
 		double[] unweightedPrecision = computePrecision(aa, alignedLog, null, max, maxFactor);
