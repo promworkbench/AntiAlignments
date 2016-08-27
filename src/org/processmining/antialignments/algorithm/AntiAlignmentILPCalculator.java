@@ -73,6 +73,7 @@ public class AntiAlignmentILPCalculator {
 
 		int row = lp.getNrows() - logLength + traceToIgnore;
 
+		int oldRH = (int) (lp.getRh(row) + 0.5);
 		if (traceToIgnore >= 0) {
 			lp.setRh(row, -maxLength);
 		}
@@ -96,10 +97,12 @@ public class AntiAlignmentILPCalculator {
 				System.out.print("|");
 			}
 		}
+		System.out.print("HD: ");
+		System.out.print(((int) vars[vars.length - 1]));
 		System.out.println();
 
 		if (traceToIgnore >= 0) {
-			lp.setRh(row, 0);
+			lp.setRh(row, oldRH);
 		}
 
 	}
@@ -151,7 +154,11 @@ public class AntiAlignmentILPCalculator {
 					dir = ((Arc) e).getWeight();
 				}
 				double tmp = lp.getMat(p, t) + dir;
-				trans2label[t - 1] = label2short.get(trans.getLabel());
+				if (trans.isInvisible()) {
+					trans2label[t - 1] = 0;
+				} else {
+					trans2label[t - 1] = label2short.get(trans.getLabel());
+				}
 				for (int i = p; i <= (maxLength + 1) * places; i += places) {
 					for (int idx = t; idx <= ((i - 1) / places + 1) * transitions && idx <= maxLength * transitions; idx += transitions) {
 						// set up all the A matrixes.
@@ -186,10 +193,10 @@ public class AntiAlignmentILPCalculator {
 		// set up the comparisons and sums
 		for (int i = 0; i < maxLength - 1; i++) {
 			for (int t = i * transitions; t < (i + 1) * transitions; t++) {
-				lp.setMat(row + i, t + 1, 1);
+				lp.setMat(row + i, t + 1, trans2label[t % transitions] <= 0 ? 0 : 1);
 			}
 			for (int t = (i + 1) * transitions; t < (i + 2) * transitions; t++) {
-				lp.setMat(row + i, t + 1, -1);
+				lp.setMat(row + i, t + 1, trans2label[t % transitions] <= 0 ? 0 : -1);
 			}
 			lp.setRowName(row + i, "X" + i + "-X" + (i + 1) + ">0");
 			lp.setConstrType(row + i, LpSolve.GE);
@@ -199,7 +206,7 @@ public class AntiAlignmentILPCalculator {
 		row = places * (maxLength + 1) + maxLength;
 		for (int i = 0; i < maxLength; i++) {
 			for (int t = i * transitions; t < (i + 1) * transitions; t++) {
-				lp.setMat(row + i, t + 1, 1);
+				lp.setMat(row + i, t + 1, trans2label[t % transitions] <= 0 ? 0 : 1);
 			}
 			lp.setRowName(row + i, "X" + i + ".1 <=1");
 			lp.setConstrType(row + i, LpSolve.LE);
@@ -210,7 +217,7 @@ public class AntiAlignmentILPCalculator {
 			// what's the hamming distance of the x's to trace t?
 			for (int e = 0; e < maxLength; e++) {
 				for (int tr = 0; tr < trans2label.length; tr++) {
-					if (e >= log[t].length || trans2label[tr] != log[t][e]) {
+					if (e >= log[t].length || (trans2label[tr] != log[t][e] && trans2label[tr] > 0)) {
 						lp.setMat(row + t, e * transitions + tr + 1, 1);
 					} else {
 						// based on the index and the fact that this transition matches that label,
@@ -226,13 +233,14 @@ public class AntiAlignmentILPCalculator {
 
 		row = (maxLength + 1) * places + 2 * maxLength + log.length;
 		for (int t = 1; t <= transitions * maxLength; t++) {
-			lp.setMat(row, t, 1);
+			lp.setMat(row, t, trans2label[t % transitions] <= 0 ? 0 : 1);
+			lp.setMat(0, t, -1);
 		}
 		lp.setRowName(row, "SumX <= " + maxLength);
 		lp.setConstrType(row, LpSolve.LE);
 
 		// maximize h
-		lp.setMat(0, transitions * maxLength + 1, 1);
+		lp.setMat(0, transitions * maxLength + 1, maxLength * maxLength);
 
 		lp.setMaxim();
 
