@@ -64,6 +64,8 @@ public class AntiAlignmentILPCalculator {
 		System.out.println("-----------------------------------------------");
 		System.out.println("Whole log. ");
 		System.out.println("Maxlength: " + maxFactor * maxLength);
+		
+		lp.printLp();
 		double[] result = solve(-1, maxFactor * maxLength);
 
 		antiAlignments.getMaxMinDistances()[log.length] = (int) (result[result.length - 2] + 0.5);
@@ -218,7 +220,6 @@ public class AntiAlignmentILPCalculator {
 					p = place2int.get(e.getTarget());
 					dir = ((Arc) e).getWeight();
 				}
-				double tmp = lp.getMat(p, t) + dir;
 				if (trans.isInvisible()) {
 					trans2label[t - 1] = 0;
 				} else {
@@ -229,7 +230,7 @@ public class AntiAlignmentILPCalculator {
 						// set up all the A matrixes.
 						if ((idx - 1) / transitions < (i - 1) / places || trans.isInvisible()) {
 							// This is one of the matrixes before the last.
-							lp.setMat(i, idx, tmp);
+							lp.setMat(i, idx, lp.getMat(i, idx) + dir);
 						} else if (dir < 0 || i > maxLength * places) {
 							// This is the last matrix, only count the negative values
 							lp.setMat(i, idx, lp.getMat(i, idx) + dir);
