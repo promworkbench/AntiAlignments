@@ -142,7 +142,7 @@ public class AntiAlignmentPlugin {
 
 		//		AntiAlignmentCalculator calculator = new AntiAlignmentCalculator(net, initialMarking, finalMarking, label2short);
 		AntiAlignmentILPCalculator calculator2 = new AntiAlignmentILPCalculator(net, initialMarking, finalMarking,
-				label2short);
+				label2short, short2label);
 
 		// Start anti-alignment computation
 		int maxFactor = 1;

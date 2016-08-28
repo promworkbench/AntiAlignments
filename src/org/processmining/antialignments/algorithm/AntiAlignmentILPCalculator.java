@@ -1,10 +1,8 @@
 package org.processmining.antialignments.algorithm;
 
 import gnu.trove.map.TObjectShortMap;
+import gnu.trove.map.TShortObjectMap;
 import gnu.trove.map.hash.TObjectShortHashMap;
-
-import java.util.Arrays;
-
 import lpsolve.LpSolve;
 import lpsolve.LpSolveException;
 
@@ -26,13 +24,17 @@ public class AntiAlignmentILPCalculator {
 	private final PetrinetSemantics semantics;
 	private final Marking finalMarking;
 	private final TObjectShortMap<String> label2short;
+	private TShortObjectMap<String> short2label;
+	private short transitions;
+	private short places;
 
 	public AntiAlignmentILPCalculator(Petrinet net, Marking initialMarking, Marking finalMarking,
-			TObjectShortMap<String> label2short) {
+			TObjectShortMap<String> label2short, TShortObjectMap<String> short2label) {
 		this.net = net;
 		this.initialMarking = initialMarking;
 		this.finalMarking = finalMarking;
 		this.label2short = label2short;
+		this.short2label = short2label;
 
 		this.semantics = PetrinetSemanticsFactory.regularPetrinetSemantics(Petrinet.class);
 		this.semantics.initialize(net.getTransitions(), initialMarking);
@@ -48,17 +50,17 @@ public class AntiAlignmentILPCalculator {
 		System.out.println("-----------------------------------------------");
 		System.out.println("Whole log. ");
 		System.out.println("Maxlength: " + maxFactor * maxLength);
-		solve(lp, log.length, -1, maxFactor * maxLength);
+		solve(lp, log, -1, maxFactor * maxLength);
 
 		int[] basis = new int[lp.getNrows() + lp.getNcolumns() + 1];
 		lp.getBasis(basis, true);
 
 		for (int t = 0; t < log.length; t++) {
 			System.out.println("-----------------------------------------------");
-			System.out.println("Removed Trace: " + Arrays.toString(log[t]));
+			System.out.println("Removed Trace: " + toString(log[t]));
 			System.out.println("Maxlength: " + maxFactor * log[t].length);
 			lp.setBasis(basis, true);
-			solve(lp, log.length, t, maxFactor * log[t].length);
+			solve(lp, log, t, maxFactor * log[t].length);
 		}
 		System.out.println("-----------------------------------------------");
 
@@ -69,15 +71,35 @@ public class AntiAlignmentILPCalculator {
 
 	}
 
-	protected void solve(LpSolve lp, int logLength, int traceToIgnore, int maxLength) throws LpSolveException {
+	protected void solve(LpSolve lp, short[][] log, int traceToIgnore, int maxLength) throws LpSolveException {
 
-		int row = lp.getNrows() - logLength + traceToIgnore;
+		int row;
+
+		row = lp.getNrows() - log.length;
+		for (int t = 0; t < log.length; t++) {
+			if (log[t].length > maxLength) {
+				// the remaining hamming distance is the part of the trace not covered by the 
+				// maxLength
+				lp.setRh(row + t, maxLength - log[t].length);
+			} else {
+				// TODO: Fix for trailing taus if shorter trace than maxLength
+				lp.setRh(row + t, 0);
+			}
+		}
+
+		row = lp.getNrows() - log.length + traceToIgnore;
 
 		int oldRH = (int) (lp.getRh(row) + 0.5);
 		if (traceToIgnore >= 0) {
-			lp.setRh(row, -maxLength);
+			// h doesn't matter
+			lp.setMat(row, lp.getNcolumns() - 1, 0);
+			// minus g for the removed trace.
+			lp.setMat(row, lp.getNcolumns(), -1);
+			lp.setConstrType(row, LpSolve.EQ);
 		}
 		lp.setRh(lp.getNrows(), maxLength);
+
+		//		lp.printLp();
 
 		int result = lp.solve();
 		if (result == lp.INFEASIBLE) {
@@ -91,27 +113,35 @@ public class AntiAlignmentILPCalculator {
 		double[] vars = new double[lp.getNcolumns()];
 		lp.getVariables(vars);
 
-		for (int i = 0; i < vars.length - 1; i++) {
+		for (int i = 0; i < vars.length - 2; i++) {
 			if (vars[i] > 0.5) {
 				System.out.print(lp.getColName(i + 1));
 				System.out.print("|");
 			}
 		}
-		System.out.print("HD: ");
-		System.out.print(((int) vars[vars.length - 1]));
-		System.out.println();
+		System.out.print("Dlog: ");
+		System.out.print(((int) (vars[vars.length - 2] + .5)));
+
+		System.out.print(" Drem: ");
+		System.out.print(((int) (vars[vars.length - 1] + .5)));
 
 		if (traceToIgnore >= 0) {
-			lp.setRh(row, oldRH);
+			// minimize h
+			lp.setMat(row, lp.getNcolumns() - 1, -1);
+			// ignore g.
+			lp.setMat(row, lp.getNcolumns(), 0);
+			lp.setConstrType(row, LpSolve.GE);
 		}
+		//		lp.printLp();
+		System.out.println();
 
 	}
 
 	protected LpSolve setupLp(final short[][] log, int maxLength) throws LpSolveException {
 
 		// replay log on model (or obtain existing replay result)
-		short transitions = 0;
-		short places = 0;
+		transitions = 0;
+		places = 0;
 
 		int[][] costs = new int[label2short.size() + 1][maxLength];
 		for (int t = 0; t < log.length; t++) {
@@ -133,7 +163,7 @@ public class AntiAlignmentILPCalculator {
 			place2int.put(p, places);
 		}
 
-		LpSolve lp = LpSolve.makeLp((maxLength + 1) * places + 2 * maxLength + log.length, transitions * maxLength + 1);
+		LpSolve lp = LpSolve.makeLp((maxLength + 1) * places + 2 * maxLength + log.length, transitions * maxLength + 2);
 
 		short[] trans2label = new short[transitions];
 
@@ -162,7 +192,7 @@ public class AntiAlignmentILPCalculator {
 				for (int i = p; i <= (maxLength + 1) * places; i += places) {
 					for (int idx = t; idx <= ((i - 1) / places + 1) * transitions && idx <= maxLength * transitions; idx += transitions) {
 						// set up all the A matrixes.
-						if ((idx - 1) / transitions < (i - 1) / places) {
+						if ((idx - 1) / transitions < (i - 1) / places || trans.isInvisible()) {
 							// This is one of the matrixes before the last.
 							lp.setMat(i, idx, tmp);
 						} else if (dir < 0 || i > maxLength * places) {
@@ -217,7 +247,7 @@ public class AntiAlignmentILPCalculator {
 			// what's the hamming distance of the x's to trace t?
 			for (int e = 0; e < maxLength; e++) {
 				for (int tr = 0; tr < trans2label.length; tr++) {
-					if (e >= log[t].length || (trans2label[tr] != log[t][e] && trans2label[tr] > 0)) {
+					if ((e >= log[t].length || trans2label[tr] != log[t][e]) && trans2label[tr] > 0) {
 						lp.setMat(row + t, e * transitions + tr + 1, 1);
 					} else {
 						// based on the index and the fact that this transition matches that label,
@@ -227,13 +257,17 @@ public class AntiAlignmentILPCalculator {
 				}
 			}
 			lp.setRowName(row + t, "trace_" + t);
+			// minus h
 			lp.setMat(row + t, transitions * maxLength + 1, -1);
+			// minus g for the removed trace.
+			lp.setMat(row + t, transitions * maxLength + 2, 0);
 			lp.setConstrType(row + t, LpSolve.GE);
 		}
 
+		// Setup maxLength constraint
 		row = (maxLength + 1) * places + 2 * maxLength + log.length;
 		for (int t = 1; t <= transitions * maxLength; t++) {
-			lp.setMat(row, t, trans2label[t % transitions] <= 0 ? 0 : 1);
+			lp.setMat(row, t, trans2label[(t - 1) % transitions] <= 0 ? 0 : 1);
 			lp.setMat(0, t, -1);
 		}
 		lp.setRowName(row, "SumX <= " + maxLength);
@@ -241,6 +275,8 @@ public class AntiAlignmentILPCalculator {
 
 		// maximize h
 		lp.setMat(0, transitions * maxLength + 1, maxLength * maxLength);
+		// minimuze g
+		lp.setMat(0, transitions * maxLength + 2, -maxLength);
 
 		lp.setMaxim();
 
@@ -273,26 +309,35 @@ public class AntiAlignmentILPCalculator {
 		for (row = (maxLength + 1) * places + maxLength; row < (maxLength + 1) * places + 2 * maxLength; row++) {
 			rhs[row] = 1;
 		}
-		row = (maxLength + 1) * places + 2 * maxLength;
-		for (int t = 0; t < log.length; t++) {
-			if (log[t].length > maxLength) {
-				// the remaining hamming distance is the part of the trace not covered by the 
-				// maxLength
-				rhs[row + t] = maxLength - log[t].length;
-			}
-		}
 		row = (maxLength + 1) * places + 2 * maxLength + log.length;
 		rhs[row] = maxLength;
 
 		lp.setRhVec(rhs);
 
-		lp.printLp();
+		//		lp.printLp();
 
 		return lp;
 	}
 
 	private double getCost(Transition trans, int i) {
 		return 1;
+	}
+
+	private String toString(short[] a) {
+		if (a == null)
+			return "null";
+		int iMax = a.length - 1;
+		if (iMax == -1)
+			return "[]";
+
+		StringBuilder b = new StringBuilder();
+		b.append('[');
+		for (int i = 0;; i++) {
+			b.append(short2label.get(a[i]));
+			if (i == iMax)
+				return b.append(']').toString();
+			b.append(", ");
+		}
 	}
 
 }
