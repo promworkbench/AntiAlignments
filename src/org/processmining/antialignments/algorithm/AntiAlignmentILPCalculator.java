@@ -64,6 +64,12 @@ public class AntiAlignmentILPCalculator {
 		}
 		System.out.println("-----------------------------------------------");
 
+		System.out.println("Removed Trace: " + toString(log[1]));
+		System.out.println("Maxlength: " + 6);
+		lp.setBasis(basis, true);
+		solve(lp, log, 1, 6);
+		System.out.println("-----------------------------------------------");
+
 		//		System.out.println(Arrays.toString(vars));
 		lp.deleteAndRemoveLp();
 
@@ -77,14 +83,16 @@ public class AntiAlignmentILPCalculator {
 
 		row = lp.getNrows() - log.length;
 		for (int t = 0; t < log.length; t++) {
-			if (log[t].length > maxLength) {
-				// the remaining hamming distance is the part of the trace not covered by the 
-				// maxLength
-				lp.setRh(row + t, maxLength - log[t].length);
-			} else {
-				// TODO: Fix for trailing taus if shorter trace than maxLength
-				lp.setRh(row + t, 0);
-			}
+			//			if (log[t].length > maxLength) {
+			//				// the remaining hamming distance is the part of the trace not covered by the 
+			//				// maxLength
+			//				//				lp.setRh(row + t, maxLength - log[t].length);
+			//				lp.setRh(row + t, maxLength - log[t].length - log[t].length);
+			//			} else {
+			//				// TODO: Fix for trailing taus if shorter trace than maxLength
+			//				//				lp.setRh(row + t, 0);
+			lp.setRh(row + t, -log[t].length);
+			//			}
 		}
 
 		row = lp.getNrows() - log.length + traceToIgnore;
@@ -247,12 +255,20 @@ public class AntiAlignmentILPCalculator {
 			// what's the hamming distance of the x's to trace t?
 			for (int e = 0; e < maxLength; e++) {
 				for (int tr = 0; tr < trans2label.length; tr++) {
-					if ((e >= log[t].length || trans2label[tr] != log[t][e]) && trans2label[tr] > 0) {
+					if (e >= log[t].length && trans2label[tr] > 0) {
 						lp.setMat(row + t, e * transitions + tr + 1, 1);
+					} //					if ((e >= log[t].length || trans2label[tr] != log[t][e]) && trans2label[tr] > 0) {
+					else if (e < log[t].length && trans2label[tr] != log[t][e] && trans2label[tr] > 0) {
+						//						lp.setMat(row + t, e * transitions + tr + 1, 1);
+						lp.setMat(row + t, e * transitions + tr + 1, 0);
+					} else if (trans2label[tr] == 0) {
+						// tau steps do not count
+						lp.setMat(row + t, e * transitions + tr + 1, 0);
 					} else {
 						// based on the index and the fact that this transition matches that label,
 						// set the value of this trace's row to 0;
-						lp.setMat(row + t, e * transitions + tr + 1, 0);
+						//						lp.setMat(row + t, e * transitions + tr + 1, 0);
+						lp.setMat(row + t, e * transitions + tr + 1, -1);
 					}
 				}
 			}
