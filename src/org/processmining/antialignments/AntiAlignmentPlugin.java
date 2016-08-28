@@ -141,23 +141,31 @@ public class AntiAlignmentPlugin {
 				short2label);
 
 		//		AntiAlignmentCalculator calculator = new AntiAlignmentCalculator(net, initialMarking, finalMarking, label2short);
-		AntiAlignmentILPCalculator calculator2 = new AntiAlignmentILPCalculator(net, initialMarking, finalMarking,
-				label2short, short2label);
 
 		// Start anti-alignment computation
 		int maxFactor = 1;
 		max *= 2 * maxFactor;
+
+		AntiAlignmentILPCalculator calculator2 = null;
+		try {
+			calculator2 = new AntiAlignmentILPCalculator(net, initialMarking, finalMarking, label2short, short2label,
+					alignedLog, max, maxFactor);
+		} catch (LpSolveException e1) {
+			// TODO Auto-generated catch block
+			e1.printStackTrace();
+		}
+
 		long start = System.nanoTime();
 
 		AntiAlignments aa = new DepthFirstTraceSearch(net, initialMarking, finalMarking, label2short)
-				.getAntiAlignments(alignedLog, max, maxFactor, new DistanceMetric.Edit());
+				.getAntiAlignments(alignedLog, max, maxFactor, new DistanceMetric.Hamming());
 
 		long mid = System.nanoTime();
 
 		//		AntiAlignments aa2 = calculator.getAntiAlignments(alignedLog, max, maxFactor);
 		AntiAlignments aa3 = null;
 		try {
-			aa3 = calculator2.getAntiAlignments(alignedLog, max, maxFactor);
+			aa3 = calculator2.getAntiAlignments();
 		} catch (LpSolveException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();

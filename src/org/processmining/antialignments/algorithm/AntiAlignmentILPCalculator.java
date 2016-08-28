@@ -1,8 +1,13 @@
 package org.processmining.antialignments.algorithm;
 
+import gnu.trove.list.TShortList;
+import gnu.trove.list.array.TShortArrayList;
 import gnu.trove.map.TObjectShortMap;
 import gnu.trove.map.TShortObjectMap;
 import gnu.trove.map.hash.TObjectShortHashMap;
+
+import java.util.Vector;
+
 import lpsolve.LpSolve;
 import lpsolve.LpSolveException;
 
@@ -27,30 +32,45 @@ public class AntiAlignmentILPCalculator {
 	private TShortObjectMap<String> short2label;
 	private short transitions;
 	private short places;
+	private short[] trans2label;
+	private final short[][] log;
+	private final int maxLength;
+	private final int maxFactor;
+	private final LpSolve lp;
 
 	public AntiAlignmentILPCalculator(Petrinet net, Marking initialMarking, Marking finalMarking,
-			TObjectShortMap<String> label2short, TShortObjectMap<String> short2label) {
+			TObjectShortMap<String> label2short, TShortObjectMap<String> short2label, short[][] log, int maxLength,
+			int maxFactor) throws LpSolveException {
 		this.net = net;
 		this.initialMarking = initialMarking;
 		this.finalMarking = finalMarking;
 		this.label2short = label2short;
 		this.short2label = short2label;
+		this.log = log;
+		this.maxLength = maxLength;
+		this.maxFactor = maxFactor;
 
 		this.semantics = PetrinetSemanticsFactory.regularPetrinetSemantics(Petrinet.class);
 		this.semantics.initialize(net.getTransitions(), initialMarking);
 
+		lp = setupLp(maxLength * maxFactor);
+
 	}
 
-	public AntiAlignments getAntiAlignments(final short[][] log, int maxLength, int maxFactor) throws LpSolveException {
+	public AntiAlignments getAntiAlignments() throws LpSolveException {
 
-		LpSolve lp = setupLp(log, maxLength * maxFactor);
-
-		System.out.println(label2short);
+		final AntiAlignments antiAlignments = new AntiAlignments(log.length);
 
 		System.out.println("-----------------------------------------------");
 		System.out.println("Whole log. ");
 		System.out.println("Maxlength: " + maxFactor * maxLength);
-		solve(lp, log, -1, maxFactor * maxLength);
+		double[] result = solve(-1, maxFactor * maxLength);
+
+		antiAlignments.getMaxMinDistances()[log.length] = (int) (result[result.length - 2] + 0.5);
+		antiAlignments.getAntiAlignments()[log.length] = getAntiAlignment(result);
+		antiAlignments.getTraces()[log.length] = getFiringSequence(result);
+		antiAlignments.getMaxDistances()[log.length] = Math.max(maxLength * maxFactor,
+				antiAlignments.getAntiAlignments()[log.length].length);
 
 		int[] basis = new int[lp.getNrows() + lp.getNcolumns() + 1];
 		lp.getBasis(basis, true);
@@ -60,40 +80,46 @@ public class AntiAlignmentILPCalculator {
 			System.out.println("Removed Trace: " + toString(log[t]));
 			System.out.println("Maxlength: " + maxFactor * log[t].length);
 			lp.setBasis(basis, true);
-			solve(lp, log, t, maxFactor * log[t].length);
-		}
-		System.out.println("-----------------------------------------------");
+			result = solve(t, maxFactor * log[t].length);
 
-		System.out.println("Removed Trace: " + toString(log[1]));
-		System.out.println("Maxlength: " + 6);
-		lp.setBasis(basis, true);
-		solve(lp, log, 1, 6);
+			antiAlignments.getMaxMinDistances()[t] = (int) (result[result.length - 2] + 0.5);
+			antiAlignments.getAntiAlignments()[t] = getAntiAlignment(result);
+			antiAlignments.getMaxDistances()[t] = Math.max(log[t].length, antiAlignments.getAntiAlignments()[t].length);
+			antiAlignments.getTraces()[t] = getFiringSequence(result);
+			antiAlignments.getTraceDistances()[t] = (int) (result[result.length - 1] + 0.5);
+
+		}
 		System.out.println("-----------------------------------------------");
 
 		//		System.out.println(Arrays.toString(vars));
 		lp.deleteAndRemoveLp();
 
-		return null;
+		return antiAlignments;
 
 	}
 
-	protected void solve(LpSolve lp, short[][] log, int traceToIgnore, int maxLength) throws LpSolveException {
+	private Vector<?> getFiringSequence(double[] result) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	private short[] getAntiAlignment(double[] result) {
+		TShortList list = new TShortArrayList();
+		for (int i = 0; i < result.length - 2; i++) {
+			if (result[i] > 0.5) {
+				// fired transition.
+				short trans = (short) (i % trans2label.length);
+				if (trans2label[trans] > 0) {
+					list.add(trans2label[trans]);
+				}
+			}
+		}
+		return list.toArray();
+	}
+
+	protected double[] solve(int traceToIgnore, int maxLength) throws LpSolveException {
 
 		int row;
-
-		row = lp.getNrows() - log.length;
-		for (int t = 0; t < log.length; t++) {
-			//			if (log[t].length > maxLength) {
-			//				// the remaining hamming distance is the part of the trace not covered by the 
-			//				// maxLength
-			//				//				lp.setRh(row + t, maxLength - log[t].length);
-			//				lp.setRh(row + t, maxLength - log[t].length - log[t].length);
-			//			} else {
-			//				// TODO: Fix for trailing taus if shorter trace than maxLength
-			//				//				lp.setRh(row + t, 0);
-			lp.setRh(row + t, -log[t].length);
-			//			}
-		}
 
 		row = lp.getNrows() - log.length + traceToIgnore;
 
@@ -142,10 +168,11 @@ public class AntiAlignmentILPCalculator {
 		}
 		//		lp.printLp();
 		System.out.println();
+		return vars;
 
 	}
 
-	protected LpSolve setupLp(final short[][] log, int maxLength) throws LpSolveException {
+	protected LpSolve setupLp(int maxLength) throws LpSolveException {
 
 		// replay log on model (or obtain existing replay result)
 		transitions = 0;
@@ -173,7 +200,7 @@ public class AntiAlignmentILPCalculator {
 
 		LpSolve lp = LpSolve.makeLp((maxLength + 1) * places + 2 * maxLength + log.length, transitions * maxLength + 2);
 
-		short[] trans2label = new short[transitions];
+		trans2label = new short[transitions];
 
 		for (PetrinetEdge<? extends PetrinetNode, ? extends PetrinetNode> e : net.getEdges()) {
 			if (e instanceof Arc) {
@@ -325,6 +352,12 @@ public class AntiAlignmentILPCalculator {
 		for (row = (maxLength + 1) * places + maxLength; row < (maxLength + 1) * places + 2 * maxLength; row++) {
 			rhs[row] = 1;
 		}
+
+		row = lp.getNrows() - log.length;
+		for (int t = 0; t < log.length; t++) {
+			rhs[row + t] = -log[t].length;
+		}
+
 		row = (maxLength + 1) * places + 2 * maxLength + log.length;
 		rhs[row] = maxLength;
 
