@@ -64,8 +64,8 @@ public class AntiAlignmentILPCalculator {
 		System.out.println("-----------------------------------------------");
 		System.out.println("Whole log. ");
 		System.out.println("Maxlength: " + maxFactor * maxLength);
-		
-		lp.printLp();
+
+		//		lp.printLp();
 		double[] result = solve(-1, maxFactor * maxLength);
 
 		antiAlignments.getMaxMinDistances()[log.length] = (int) (result[result.length - 2] + 0.5);
