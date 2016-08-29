@@ -40,5 +40,6 @@
 	<classpathentry kind="lib" path="stdlib/jfreechart-1.0.14.jar"/>
 	<classpathentry kind="con" path="org.apache.ivyde.eclipse.cpcontainer.IVYDE_CONTAINER/?project=NewPackageIvy&amp;ivyXmlPath=ivy.xml&amp;confs=*&amp;ivySettingsPath=ivysettings.xml&amp;loadSettingsOnDemand=false&amp;ivyUserDir=&amp;propertyFiles="/>
 	<classpathentry kind="lib" path="stdlib/commons-math3-3.5.jar"/>
+	<classpathentry kind="lib" path="C:/gurobi652/win64/lib/gurobi.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>
