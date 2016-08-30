@@ -1,6 +1,8 @@
 package org.processmining.antialignments.algorithm;
 
+import gnu.trove.list.TIntList;
 import gnu.trove.list.TShortList;
+import gnu.trove.list.array.TIntArrayList;
 import gnu.trove.list.array.TShortArrayList;
 import gnu.trove.map.TObjectShortMap;
 import gnu.trove.map.TShortObjectMap;
@@ -10,6 +12,7 @@ import gurobi.GRBEnv;
 import gurobi.GRBException;
 import gurobi.GRBModel;
 
+import java.util.Arrays;
 import java.util.Vector;
 
 import lpsolve.LpSolve;
@@ -30,26 +33,31 @@ import org.processmining.models.semantics.petrinet.impl.PetrinetSemanticsFactory
 public class AntiAlignmentILPCalculator {
 
 	private final Petrinet net;
-	private final Marking initialMarking;
+	//	private final Marking initialMarking;
 	private final PetrinetSemantics semantics;
-	private final Marking finalMarking;
+	//	private final Marking finalMarking;
 	private final TObjectShortMap<String> label2short;
 	private TShortObjectMap<String> short2label;
 	private short transitions;
 	private short places;
+	private Transition[] short2trans;
+	private Place[] short2place;
+
 	private short[] trans2label;
 	private final short[][] log;
 	private final int maxLength;
 	private final int maxFactor;
-	private final LPMatrix lpMatrix;
+
 	private final GRBEnv gbEnv;
+	private TObjectShortHashMap<Object> trans2int;
+	private TObjectShortHashMap<Object> place2int;
 
 	public AntiAlignmentILPCalculator(Petrinet net, Marking initialMarking, Marking finalMarking,
 			TObjectShortMap<String> label2short, TShortObjectMap<String> short2label, short[][] log, int maxLength,
 			int maxFactor) throws LpSolveException, GRBException {
 		this.net = net;
-		this.initialMarking = initialMarking;
-		this.finalMarking = finalMarking;
+		//		this.initialMarking = initialMarking;
+		//		this.finalMarking = finalMarking;
 		this.label2short = label2short;
 		this.short2label = short2label;
 		this.log = log;
@@ -59,17 +67,76 @@ public class AntiAlignmentILPCalculator {
 		this.semantics = PetrinetSemanticsFactory.regularPetrinetSemantics(Petrinet.class);
 		this.semantics.initialize(net.getTransitions(), initialMarking);
 
-		System.out.println("Setting up LP");
-		lpMatrix = setupLp(maxLength * maxFactor, true);
-
-		System.out.println("IP with " + lpMatrix.getNcolumns() + " columns and " + lpMatrix.getNrows() + " rows.");
+		setupDataStructures();
 
 		gbEnv = new GRBEnv();
 		gbEnv.set(GRB.IntParam.OutputFlag, 0);
 
+		TIntList firingSequence = new TIntArrayList(maxLength * maxFactor);
+		solveByDrillingDown(maxLength * maxFactor, initialMarking, finalMarking, firingSequence);
+		System.out.println(firingSequence);
+
 	}
 
-	public AntiAlignments getAntiAlignments() throws LpSolveException, GRBException {
+	protected void solveByDrillingDown(int maxLength, Marking initialMarking, Marking finalMarking,
+			TIntList firingSequence) throws LpSolveException, GRBException {
+
+		System.out
+				.println("Solving maxlength " + maxLength + " from marking " + initialMarking + " to " + finalMarking);
+		if (maxLength > 3) {
+
+			LPMatrix matrix = setupLpForSplit(maxLength, true, initialMarking, finalMarking);
+			//			matrix.toLpSolve().printLp();
+
+			//			matrix.printLp();
+
+			double[] vars = solveForSplit(matrix, null);
+
+			// get the intermediate marking:
+			Marking intermediate = new Marking();
+			// Iterate over the X vector
+			for (int p = 0; p < places; p++) {
+				double effect = -matrix.getRh(p + places);
+				for (int t = 0; t < transitions; t++) {
+					effect += vars[t] * matrix.getMat(p, t);
+				}
+				assert effect >= 0;
+				if (effect > 0) {
+					intermediate.add(short2place[p], (int) (effect + 0.5));
+				}
+			}
+
+			System.out.println(Arrays.toString(vars));
+			System.out.println("Intermediate marking: " + intermediate);
+			if (!intermediate.equals(initialMarking)) {
+				solveByDrillingDown(maxLength / 2 + maxLength % 2, initialMarking, intermediate, firingSequence);
+			}
+			if (!intermediate.equals(finalMarking)) {
+				solveByDrillingDown(maxLength / 2, intermediate, finalMarking, firingSequence);
+			}
+
+		} else {
+			LPMatrix matrix = setupLpForFullSequence(maxLength, true, initialMarking, finalMarking);
+			//			matrix.printLp();
+			double[] vars = solveForFullSequence(matrix, -1, maxLength, null);
+			for (int t = 0; t < vars.length - 2; t++) {
+				if (vars[t] > 0.5) {
+					assert ((int) (vars[t] + 0.5)) == 1;
+					firingSequence.add(t % transitions);
+				}
+			}
+			//			System.out.println(Arrays.toString(vars));
+		}
+
+	}
+
+	public AntiAlignments getAntiAlignments(Marking initialMarking, Marking finalMarking) throws LpSolveException,
+			GRBException {
+
+		System.out.println("Setting up LP");
+		LPMatrix lpMatrix = setupLpForFullSequence(maxLength * maxFactor, true, initialMarking, finalMarking);
+
+		System.out.println("IP with " + lpMatrix.getNcolumns() + " columns and " + lpMatrix.getNrows() + " rows.");
 
 		final AntiAlignments antiAlignments = new AntiAlignments(log.length);
 
@@ -79,7 +146,7 @@ public class AntiAlignmentILPCalculator {
 		System.out.flush();
 
 		//		lp.printLp();
-		double[] result = solve(-1, maxFactor * maxLength, null);// "D:/temp/antialignment/ilp_instance_log.mps");
+		double[] result = solveForFullSequence(lpMatrix, -1, maxFactor * maxLength, null);// "D:/temp/antialignment/ilp_instance_log.mps");
 
 		antiAlignments.getMaxMinDistances()[log.length] = (int) (result[result.length - 2] + 0.5);
 		antiAlignments.getAntiAlignments()[log.length] = getAntiAlignment(result);
@@ -96,7 +163,7 @@ public class AntiAlignmentILPCalculator {
 			System.out.println("Maxlength: " + maxFactor * log[t].length);
 			System.out.flush();
 			//			lp.setBasis(basis, true);
-			result = solve(t, maxFactor * log[t].length, null);//, "D:/temp/antialignment/ilp_instance_t" + t + ".mps");
+			result = solveForFullSequence(lpMatrix, t, maxFactor * log[t].length, null);//, "D:/temp/antialignment/ilp_instance_t" + t + ".mps");
 
 			antiAlignments.getMaxMinDistances()[t] = (int) (result[result.length - 2] + 0.5);
 			antiAlignments.getAntiAlignments()[t] = getAntiAlignment(result);
@@ -132,7 +199,8 @@ public class AntiAlignmentILPCalculator {
 		return list.toArray();
 	}
 
-	protected double[] solve(int traceToIgnore, int maxLength, String filename) throws LpSolveException, GRBException {
+	protected double[] solveForFullSequence(LPMatrix lpMatrix, int traceToIgnore, int maxLength, String filename)
+			throws LpSolveException, GRBException {
 
 		int row;
 
@@ -149,12 +217,12 @@ public class AntiAlignmentILPCalculator {
 		lpMatrix.setRh(lpMatrix.getNrows() - 1, maxLength);
 
 		//		lp.printLp();
-		System.out.print("Pushing to Solver .... ");
+		//		System.out.print("Pushing to Solver .... ");
 
 		//		LpSolve lp = lpMatrix.toLpSolve();
 		GRBModel grbModel = lpMatrix.toGurobi(gbEnv);
 
-		System.out.println("Done");
+		//		System.out.println("Done");
 		try {
 			int result = -1;
 			double[] vars = new double[lpMatrix.getNcolumns()];
@@ -182,6 +250,12 @@ public class AntiAlignmentILPCalculator {
 
 					for (int j = 0; j < vars.length; j++)
 						vars[j] = grbModel.getVars()[j].get(GRB.DoubleAttr.X);
+
+				} else if (grbModel.get(GRB.IntAttr.Status) == GRB.Status.INFEASIBLE) {
+
+					lpMatrix.toLpSolve().writeLp("D:/temp/antialignment/test.lp");
+					lpMatrix.toLpSolve().writeMps("D:/temp/antialignment/test.mps");
+					System.out.println("INFEASIBLE");
 				}
 
 				for (int i = 0; i < vars.length - 2; i++) {
@@ -214,8 +288,7 @@ public class AntiAlignmentILPCalculator {
 
 	}
 
-	protected LPMatrix setupLp(int maxLength, boolean integerVariables) throws LpSolveException {
-
+	protected void setupDataStructures() {
 		// replay log on model (or obtain existing replay result)
 		transitions = 0;
 		places = 0;
@@ -228,22 +301,53 @@ public class AntiAlignmentILPCalculator {
 			}
 		}
 
-		TObjectShortMap<Transition> trans2int = new TObjectShortHashMap<>(net.getTransitions().size() / 2 * 3, 0.7f,
-				(short) 0);
+		short2trans = new Transition[net.getTransitions().size()];
+		trans2int = new TObjectShortHashMap<>(net.getTransitions().size() / 2 * 3, 0.7f, (short) 0);
 		for (Transition t : net.getTransitions()) {
 			trans2int.put(t, transitions);
+			short2trans[transitions] = t;
 			transitions++;
 		}
-		TObjectShortMap<Place> place2int = new TObjectShortHashMap<>(net.getPlaces().size() / 2 * 3, 0.7f, (short) 0);
+		short2place = new Place[net.getPlaces().size()];
+		place2int = new TObjectShortHashMap<>(net.getPlaces().size() / 2 * 3, 0.7f, (short) 0);
 		for (Place p : net.getPlaces()) {
 			place2int.put(p, places);
+			short2place[places] = p;
 			places++;
 		}
 
+		trans2label = new short[transitions];
+
+		for (PetrinetEdge<? extends PetrinetNode, ? extends PetrinetNode> e : net.getEdges()) {
+			short t;
+			Transition trans;
+			if (e instanceof Arc) {
+				if (e.getSource() instanceof Place) {
+					trans = (Transition) e.getTarget();
+					t = trans2int.get(trans);
+				} else {
+					trans = (Transition) e.getSource();
+					t = trans2int.get(trans);
+				}
+			} else if (e instanceof InhibitorArc) {
+				trans = (Transition) e.getTarget();
+				t = trans2int.get(trans);
+			} else {
+				continue;
+			}
+			if (trans.isInvisible()) {
+				trans2label[t] = -1;
+			} else {
+				trans2label[t] = label2short.get(trans.getLabel());
+			}
+		}
+	}
+
+	protected LPMatrix setupLpForFullSequence(int maxLength, boolean integerVariables, Marking initialMarking,
+			Marking finalMarking) throws LpSolveException {
+
 		//		LpSolve lp = LpSolve.makeLp((maxLength + 1) * places + 2 * maxLength + log.length, transitions * maxLength + 2);
 		LPMatrix lp = new LPMatrix((maxLength + 1) * places + 2 * maxLength + log.length, transitions * maxLength + 2);
-
-		trans2label = new short[transitions];
 
 		for (PetrinetEdge<? extends PetrinetNode, ? extends PetrinetNode> e : net.getEdges()) {
 			short p, t;
@@ -271,11 +375,6 @@ public class AntiAlignmentILPCalculator {
 			} else {
 				continue;
 			}
-			if (trans.isInvisible()) {
-				trans2label[t] = -1;
-			} else {
-				trans2label[t] = label2short.get(trans.getLabel());
-			}
 			for (int i = p; i < (maxLength + 1) * places; i += places) {
 				for (int idx = t; idx < (i / places + 1) * transitions && idx < maxLength * transitions; idx += transitions) {
 					// set up all the A matrixes.
@@ -293,9 +392,9 @@ public class AntiAlignmentILPCalculator {
 					//							lp.setMat(0, idx, maxLength
 					//									* costs[label2short.get(trans.getLabel())][(idx - 1) / transitions] - 1);
 					//						}
-					lp.setColName(idx, trans.getLabel() + "," + idx / transitions);
+					lp.setColName(idx, trans.getLabel().replace("\\n$invisible$", "") + "_" + idx / transitions);
 				}
-				lp.setRowName(i, "A " + i / places + "," + (i % places));
+				lp.setRowName(i, "A" + i / places + "_" + (i % places));
 				if (i < maxLength * places) {
 					// at least -current marking
 					// or equal to - current marking in case of an inhibitorArc
@@ -316,7 +415,7 @@ public class AntiAlignmentILPCalculator {
 			for (int t = (i + 1) * transitions; t < (i + 2) * transitions; t++) {
 				lp.setMat(row + i, t, trans2label[t % transitions] < 0 ? 0 : -1);
 			}
-			lp.setRowName(row + i, "X" + i + "-X" + (i + 1) + ">0");
+			lp.setRowName(row + i, "X" + i + "X" + (i + 1));
 			lp.setConstrType(row + i, LpSolve.GE);
 		}
 
@@ -326,7 +425,7 @@ public class AntiAlignmentILPCalculator {
 			for (int t = i * transitions; t < (i + 1) * transitions; t++) {
 				lp.setMat(row + i, t, trans2label[t % transitions] < 0 ? 0 : 1);
 			}
-			lp.setRowName(row + i, "X" + i + ".1 <=1");
+			lp.setRowName(row + i, "X" + i + ".1");
 			lp.setConstrType(row + i, LpSolve.LE);
 		}
 
@@ -366,12 +465,14 @@ public class AntiAlignmentILPCalculator {
 			lp.setMat(row, t, trans2label[t % transitions] < 0 ? 0 : 1);
 			lp.setObjective(t, -1);
 		}
-		lp.setRowName(row, "SumX <= " + maxLength);
+		lp.setRowName(row, "SumX");
 		lp.setConstrType(row, LpSolve.LE);
 
 		// maximize h
+		lp.setInt(transitions * maxLength, integerVariables);
 		lp.setObjective(transitions * maxLength, maxLength * maxLength);
 		// minimuze g
+		lp.setInt(transitions * maxLength + 1, integerVariables);
 		lp.setObjective(transitions * maxLength + 1, -maxLength);
 
 		lp.setMaxim();
@@ -427,4 +528,210 @@ public class AntiAlignmentILPCalculator {
 		}
 	}
 
+	protected LPMatrix setupLpForSplit(int maxLength, boolean integerVariables, Marking initialMarking,
+			Marking finalMarking) throws LpSolveException {
+
+		//		LpSolve lp = LpSolve.makeLp((maxLength + 1) * places + 2 * maxLength + log.length, transitions * maxLength + 2);
+		LPMatrix lp = new LPMatrix(2 * places + 2 * log.length + 2, transitions * 2 + 2);
+
+		for (PetrinetEdge<? extends PetrinetNode, ? extends PetrinetNode> e : net.getEdges()) {
+			short p, t;
+			int dir;
+			int type = LpSolve.GE;
+			Transition trans;
+			if (e instanceof Arc) {
+				if (e.getSource() instanceof Place) {
+					p = place2int.get(e.getSource());
+					trans = (Transition) e.getTarget();
+					t = trans2int.get(trans);
+					dir = -((Arc) e).getWeight();
+				} else {
+					trans = (Transition) e.getSource();
+					t = trans2int.get(trans);
+					p = place2int.get(e.getTarget());
+					dir = ((Arc) e).getWeight();
+				}
+			} else if (e instanceof InhibitorArc) {
+				p = place2int.get(e.getSource());
+				trans = (Transition) e.getTarget();
+				t = trans2int.get(trans);
+				dir = 0;
+				type = LpSolve.EQ;
+			} else {
+				continue;
+			}
+			// set up all the two A matrixes.
+			lp.setMat(p, t, lp.getMat(p, t) + dir);
+			lp.setMat(p + places, t, lp.getMat(p + places, t) + dir);
+			lp.setMat(p, t + transitions, lp.getMat(p, t + transitions) + dir);
+
+			lp.setInt(t, integerVariables);
+			lp.setInt(t + transitions, integerVariables);
+
+			lp.setColName(t, trans.getLabel().replace("\\n$invisible$", "") + ",X");
+			lp.setColName(t + transitions, trans.getLabel().replace("\\n$invisible$", "") + ",Y");
+
+			lp.setRowName(p, "A1" + p);
+			lp.setRowName(p + places, "A2" + p);
+
+			lp.setConstrType(p, LpSolve.EQ);
+			lp.setConstrType(p + places, LpSolve.GE);
+
+			if (!trans.isInvisible()) {
+				lp.setMat(2 * places, t, 1);
+				lp.setMat(2 * places + 1, t + transitions, 1);
+
+			} else {
+				// where possible, transfer tau steps to Y instead of X
+				lp.setObjective(transitions + t, 1);
+
+			}
+		}
+		// The length of the X vector is equal to half the maxLength
+		lp.setConstrType(2 * places, LpSolve.EQ);
+		// The remainder is the Y vector
+		lp.setConstrType(2 * places + 1, LpSolve.LE);
+
+		int row = 2 * places + 2;
+
+		int maxLengthX = maxLength / 2 + maxLength % 2;
+		int maxLengthY = maxLength - maxLengthX;
+		for (int t = 0; t < log.length; t++) {
+			// what's the hamming distance of the x's to trace t[0..maxLengthX]?
+			for (int e = 0; e < maxLengthX; e++) {
+				for (int tr = 0; tr < trans2label.length; tr++) {
+					if (e >= log[t].length && trans2label[tr] > 0) {
+						lp.setMat(row + 2 * t, tr, lp.getMat(row + 2 * t, tr) + 1);
+					} else if (e < log[t].length && trans2label[tr] != log[t][e] && trans2label[tr] >= 0) {
+
+						//SKIP
+						lp.setMat(row + 2 * t, tr, lp.getMat(row + 2 * t, tr) + 0);
+					} else if (trans2label[tr] < 0) {
+						// tau steps do not count
+						//SKIP
+						lp.setMat(row + 2 * t, tr, lp.getMat(row + 2 * t, tr) + 0);
+					} else {
+						// based on the index and the fact that this transition matches that label,
+						// set the value of this trace's row to 0;
+						//						lp.setMat(row + t, e * transitions + tr + 1, 0);
+						lp.setMat(row + 2 * t, tr, lp.getMat(row + 2 * t, tr) - 1);
+					}
+				}
+			}
+			for (int e = maxLengthX; e < maxLength; e++) {
+				for (int tr = 0; tr < trans2label.length; tr++) {
+					if (e >= log[t].length && trans2label[tr] > 0) {
+						lp.setMat(row + 2 * t + 1, transitions + tr, lp.getMat(row + 2 * t + 1, tr) + 1);
+					} else if (e < log[t].length && trans2label[tr] != log[t][e] && trans2label[tr] >= 0) {
+						//SKIP
+						lp.setMat(row + 2 * t + 1, transitions + tr, lp.getMat(row + 2 * t + 1, tr) + 0);
+					} else if (trans2label[tr] < 0) {
+						// tau steps do not count
+						//SKIP
+						lp.setMat(row + 2 * t + 1, transitions + tr, lp.getMat(row + 2 * t + 1, tr) + 0);
+					} else {
+						// based on the index and the fact that this transition matches that label,
+						// set the value of this trace's row to 0;
+						//						lp.setMat(row + t, e * transitions + tr + 1, 0);
+						lp.setMat(row + 2 * t + 1, transitions + tr, lp.getMat(row + 2 * t + 1, tr) - 1);
+					}
+				}
+			}
+			lp.setRowName(row + 2 * t, "t_" + t + "_X");
+			lp.setRowName(row + 2 * t + 1, "t_" + t + "_Y");
+			// minus h
+			lp.setMat(row + 2 * t, 2 * transitions, -1);
+			lp.setMat(row + 2 * t + 1, 2 * transitions + 1, -1);
+			lp.setConstrType(row + 2 * t, LPMatrix.GE);
+			lp.setConstrType(row + 2 * t + 1, LPMatrix.GE);
+		}
+
+		// maximize h
+		lp.setColName(2 * transitions, "HX");
+		lp.setObjective(2 * transitions, maxLength * maxLength);
+		// maximize g
+		lp.setColName(2 * transitions + 1, "HY");
+		lp.setObjective(2 * transitions + 1, maxLength * maxLength);
+
+		lp.setMaxim();
+
+		double[] rhs = new double[2 * places + 2 * log.length + 2];
+
+		for (Place p : initialMarking.baseSet()) {
+			rhs[place2int.get(p)] = -initialMarking.occurrences(p);
+			rhs[place2int.get(p) + places] = -initialMarking.occurrences(p);
+		}
+		for (Place p : finalMarking.baseSet()) {
+			rhs[place2int.get(p)] += finalMarking.occurrences(p);
+		}
+		rhs[2 * places] = maxLengthX;
+		rhs[2 * places + 1] = maxLengthY;
+
+		row = 2 * places + 2;
+		for (int t = 0; t < log.length; t++) {
+			if (log[t].length < maxLengthX) {
+				rhs[row + 2 * t] = -log[t].length;
+			} else {
+				rhs[row + 2 * t] = -maxLengthX;
+			}
+			if (log[t].length > maxLengthX) {
+				rhs[row + 2 * t + 1] = -(log[t].length - maxLengthX);
+			} else {
+				rhs[row + 2 * t + 1] = 0;
+			}
+
+		}
+
+		lp.setRhVec(rhs);
+
+		//		lp.printLp();
+
+		return lp;
+	}
+
+	protected double[] solveForSplit(LPMatrix lpMatrix, String filename) throws LpSolveException, GRBException {
+
+		//		System.out.print("Pushing to Solver .... ");
+
+		//		LpSolve lp = lpMatrix.toLpSolve();
+		GRBModel grbModel = lpMatrix.toGurobi(gbEnv);
+
+		//		System.out.println("Done");
+		try {
+			double[] vars = new double[lpMatrix.getNcolumns()];
+			if (filename != null) {
+				//				lp.writeMps(filename);
+			} else {
+
+				//				lp.printLp();
+
+				//				result = lp.solve();
+
+				grbModel.optimize();
+
+				//				if (result == lp.INFEASIBLE) {
+				//					System.out.println("Result: INFEASIBLE");
+				//				} else if (result == lpMatrix.OPTIMAL) {
+				//					System.out.println("Result: OPTIMAL");
+				//				} else {
+				//					System.out.println("Result: " + result);
+				//				}
+				//
+				//				lp.getVariables(vars);
+
+				if (grbModel.get(GRB.IntAttr.Status) == GRB.Status.OPTIMAL) {
+
+					for (int j = 0; j < vars.length; j++)
+						vars[j] = grbModel.getVars()[j].get(GRB.DoubleAttr.X);
+				}
+				//				System.out.println(Arrays.toString(vars));
+
+			}
+			return vars;
+		} finally {
+			grbModel.dispose();
+			//			lp.deleteAndRemoveLp();
+		}
+
+	}
 }

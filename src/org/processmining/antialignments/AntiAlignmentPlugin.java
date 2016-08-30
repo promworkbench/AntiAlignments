@@ -11,7 +11,6 @@ import gnu.trove.set.hash.TShortHashSet;
 import gurobi.GRBException;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -159,11 +158,13 @@ public class AntiAlignmentPlugin {
 			e.printStackTrace();
 		}
 
+		AntiAlignments aa;
+
 		long start = System.nanoTime();
 
 		AntiAlignments aa3 = null;
 		try {
-			aa3 = calculator2.getAntiAlignments();
+			aa3 = calculator2.getAntiAlignments(initialMarking, finalMarking);
 		} catch (LpSolveException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -177,23 +178,25 @@ public class AntiAlignmentPlugin {
 
 		mid = System.nanoTime();
 		//		AntiAlignments aa2 = calculator.getAntiAlignments(alignedLog, max, maxFactor);
-		AntiAlignments aa = new DepthFirstTraceSearch(net, initialMarking, finalMarking, label2short)
-				.getAntiAlignments(alignedLog, max, maxFactor, new DistanceMetric.Hamming());
+		aa = new DepthFirstTraceSearch(net, initialMarking, finalMarking, label2short).getAntiAlignments(alignedLog,
+				max, maxFactor, new DistanceMetric.Hamming());
 
 		long end = System.nanoTime();
 
-		System.out.println("old: " + (end - mid) / 1000000.0);
+		aa = aa3;
 
-		System.out.println("old: " + Arrays.toString(aa.getMaxMinDistances()));
-		System.out.println("new: " + Arrays.toString(aa3.getMaxMinDistances()));
-		for (int i = 0; i < aa.getMaxMinDistances().length; i++) {
-			if (aa.getMaxMinDistances()[i] != aa3.getMaxMinDistances()[i]) {
-				System.out.print("OLD: ");
-				System.out.println(toString(aa.getAntiAlignments()[i], short2label));
-				System.out.print("NEW: ");
-				System.out.println(toString(aa3.getAntiAlignments()[i], short2label));
-			}
-		}
+		//		System.out.println("old: " + (end - mid) / 1000000.0);
+		//
+		//		System.out.println("old: " + Arrays.toString(aa.getMaxMinDistances()));
+		//		System.out.println("new: " + Arrays.toString(aa3.getMaxMinDistances()));
+		//		for (int i = 0; i < aa.getMaxMinDistances().length; i++) {
+		//			if (aa.getMaxMinDistances()[i] != aa3.getMaxMinDistances()[i]) {
+		//				System.out.print("OLD: ");
+		//				System.out.println(toString(aa.getAntiAlignments()[i], short2label));
+		//				System.out.print("NEW: ");
+		//				System.out.println(toString(aa3.getAntiAlignments()[i], short2label));
+		//			}
+		//		}
 
 		double[] weightedPrecision = computePrecision(aa, alignedLog, frequencies, max, maxFactor);
 		double[] unweightedPrecision = computePrecision(aa, alignedLog, null, max, maxFactor);

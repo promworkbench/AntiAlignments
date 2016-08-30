@@ -62,7 +62,7 @@ public class LPMatrix {
 	}
 
 	public void setLowbo(int column, double value) {
-		upBo[column] = value;
+		lowBo[column] = value;
 	}
 
 	public void setColName(int column, String name) {
@@ -198,4 +198,19 @@ public class LPMatrix {
 	public String getColName(int column) {
 		return colNames[column];
 	}
+
+	public void printLp() {
+		LpSolve lp = null;
+		try {
+			lp = toLpSolve();
+			lp.printLp();
+		} catch (LpSolveException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} finally {
+			lp.deleteAndRemoveLp();
+		}
+
+	}
+
 }
