@@ -12,7 +12,6 @@ import gurobi.GRBEnv;
 import gurobi.GRBException;
 import gurobi.GRBModel;
 
-import java.util.Arrays;
 import java.util.Vector;
 
 import lpsolve.LpSolve;
@@ -85,40 +84,42 @@ public class AntiAlignmentILPCalculator {
 				.println("Solving maxlength " + maxLength + " from marking " + initialMarking + " to " + finalMarking);
 		if (maxLength > 3) {
 
-			LPMatrix matrix = setupLpForSplit(maxLength, true, initialMarking, finalMarking);
-			//			matrix.toLpSolve().printLp();
+			int maxLengthX = maxLength / 2 + maxLength % 2;
+			int maxLengthY = maxLength - maxLengthX;
 
-			//			matrix.printLp();
+			LPMatrix matrix = setupLpForSplit(maxLengthX, maxLengthY, true, initialMarking, finalMarking);
+			double[] vars = new double[matrix.getNcolumns()];
 
-			double[] vars = solveForSplit(matrix, null);
+			Marking intermediate = determineSplitMarking(matrix, vars);
 
-			// get the intermediate marking:
-			Marking intermediate = new Marking();
-			// Iterate over the X vector
-			for (int p = 0; p < places; p++) {
-				double effect = -matrix.getRh(p + places);
-				for (int t = 0; t < transitions; t++) {
-					effect += vars[t] * matrix.getMat(p, t);
-				}
-				assert effect >= 0;
-				if (effect > 0) {
-					intermediate.add(short2place[p], (int) (effect + 0.5));
-				}
-			}
-
-			System.out.println(Arrays.toString(vars));
 			System.out.println("Intermediate marking: " + intermediate);
 			if (!intermediate.equals(initialMarking)) {
 				solveByDrillingDown(maxLength / 2 + maxLength % 2, initialMarking, intermediate, firingSequence);
-			}
-			if (!intermediate.equals(finalMarking)) {
-				solveByDrillingDown(maxLength / 2, intermediate, finalMarking, firingSequence);
+				if (!intermediate.equals(finalMarking)) {
+					solveByDrillingDown(maxLength / 2, intermediate, finalMarking, firingSequence);
+				}
+			} else {
+				// Initial Marking is kept intact. Possible spurious trace, or transition invariant detected
+				// Now do 1+ rest search.
+				matrix = setupLpForSplit(1, maxLength - 1, true, initialMarking, finalMarking);
+				intermediate = determineSplitMarking(matrix, vars);
+				for (int t = 0; t < transitions; t++) {
+					if (vars[t] > 0.5) {
+						assert ((int) (vars[t] + 0.5)) == 1;
+						firingSequence.add(t % transitions);
+					}
+				}
+
+				if (!intermediate.equals(finalMarking)) {
+					solveByDrillingDown(maxLength - 1, intermediate, finalMarking, firingSequence);
+				}
 			}
 
 		} else {
 			LPMatrix matrix = setupLpForFullSequence(maxLength, true, initialMarking, finalMarking);
 			//			matrix.printLp();
-			double[] vars = solveForFullSequence(matrix, -1, maxLength, null);
+			double[] vars = new double[matrix.getNcolumns()];
+			solveForFullSequence(matrix, -1, maxLength, null, vars);
 			for (int t = 0; t < vars.length - 2; t++) {
 				if (vars[t] > 0.5) {
 					assert ((int) (vars[t] + 0.5)) == 1;
@@ -128,6 +129,29 @@ public class AntiAlignmentILPCalculator {
 			//			System.out.println(Arrays.toString(vars));
 		}
 
+	}
+
+	protected Marking determineSplitMarking(LPMatrix matrix, double[] vars) throws LpSolveException, GRBException {
+		//			matrix.toLpSolve().printLp();
+
+		//			matrix.printLp();
+
+		solveForSplit(matrix, null, vars);
+
+		// get the intermediate marking:
+		Marking intermediate = new Marking();
+		// Iterate over the X vector
+		for (int p = 0; p < places; p++) {
+			double effect = -matrix.getRh(p + places);
+			for (int t = 0; t < transitions; t++) {
+				effect += vars[t] * matrix.getMat(p, t);
+			}
+			assert effect >= 0;
+			if (effect > 0) {
+				intermediate.add(short2place[p], (int) (effect + 0.5));
+			}
+		}
+		return intermediate;
 	}
 
 	public AntiAlignments getAntiAlignments(Marking initialMarking, Marking finalMarking) throws LpSolveException,
@@ -146,7 +170,8 @@ public class AntiAlignmentILPCalculator {
 		System.out.flush();
 
 		//		lp.printLp();
-		double[] result = solveForFullSequence(lpMatrix, -1, maxFactor * maxLength, null);// "D:/temp/antialignment/ilp_instance_log.mps");
+		double[] result = new double[lpMatrix.getNcolumns()];
+		solveForFullSequence(lpMatrix, -1, maxFactor * maxLength, null, result);// "D:/temp/antialignment/ilp_instance_log.mps");
 
 		antiAlignments.getMaxMinDistances()[log.length] = (int) (result[result.length - 2] + 0.5);
 		antiAlignments.getAntiAlignments()[log.length] = getAntiAlignment(result);
@@ -163,7 +188,7 @@ public class AntiAlignmentILPCalculator {
 			System.out.println("Maxlength: " + maxFactor * log[t].length);
 			System.out.flush();
 			//			lp.setBasis(basis, true);
-			result = solveForFullSequence(lpMatrix, t, maxFactor * log[t].length, null);//, "D:/temp/antialignment/ilp_instance_t" + t + ".mps");
+			solveForFullSequence(lpMatrix, t, maxFactor * log[t].length, null, result);//, "D:/temp/antialignment/ilp_instance_t" + t + ".mps");
 
 			antiAlignments.getMaxMinDistances()[t] = (int) (result[result.length - 2] + 0.5);
 			antiAlignments.getAntiAlignments()[t] = getAntiAlignment(result);
@@ -199,8 +224,8 @@ public class AntiAlignmentILPCalculator {
 		return list.toArray();
 	}
 
-	protected double[] solveForFullSequence(LPMatrix lpMatrix, int traceToIgnore, int maxLength, String filename)
-			throws LpSolveException, GRBException {
+	protected void solveForFullSequence(LPMatrix lpMatrix, int traceToIgnore, int maxLength, String filename,
+			double[] vars) throws LpSolveException, GRBException {
 
 		int row;
 
@@ -225,7 +250,6 @@ public class AntiAlignmentILPCalculator {
 		//		System.out.println("Done");
 		try {
 			int result = -1;
-			double[] vars = new double[lpMatrix.getNcolumns()];
 			if (filename != null) {
 				//				lp.writeMps(filename);
 			} else {
@@ -280,7 +304,6 @@ public class AntiAlignmentILPCalculator {
 				//		lp.printLp();
 				System.out.println();
 			}
-			return vars;
 		} finally {
 			grbModel.dispose();
 			//			lp.deleteAndRemoveLp();
@@ -528,8 +551,8 @@ public class AntiAlignmentILPCalculator {
 		}
 	}
 
-	protected LPMatrix setupLpForSplit(int maxLength, boolean integerVariables, Marking initialMarking,
-			Marking finalMarking) throws LpSolveException {
+	protected LPMatrix setupLpForSplit(int maxLengthX, int maxLengthY, boolean integerVariables,
+			Marking initialMarking, Marking finalMarking) throws LpSolveException {
 
 		//		LpSolve lp = LpSolve.makeLp((maxLength + 1) * places + 2 * maxLength + log.length, transitions * maxLength + 2);
 		LPMatrix lp = new LPMatrix(2 * places + 2 * log.length + 2, transitions * 2 + 2);
@@ -562,7 +585,9 @@ public class AntiAlignmentILPCalculator {
 			}
 			// set up all the two A matrixes.
 			lp.setMat(p, t, lp.getMat(p, t) + dir);
-			lp.setMat(p + places, t, lp.getMat(p + places, t) + dir);
+			if (maxLengthX > 1 || trans.isInvisible() || dir < 0) {
+				lp.setMat(p + places, t, lp.getMat(p + places, t) + dir);
+			}
 			lp.setMat(p, t + transitions, lp.getMat(p, t + transitions) + dir);
 
 			lp.setInt(t, integerVariables);
@@ -571,7 +596,7 @@ public class AntiAlignmentILPCalculator {
 			lp.setColName(t, trans.getLabel().replace("\\n$invisible$", "") + ",X");
 			lp.setColName(t + transitions, trans.getLabel().replace("\\n$invisible$", "") + ",Y");
 
-			lp.setRowName(p, "A1" + p);
+			lp.setRowName(p, "A" + (maxLengthX == 1 ? "'1" : "1") + p);
 			lp.setRowName(p + places, "A2" + p);
 
 			lp.setConstrType(p, LpSolve.EQ);
@@ -594,8 +619,6 @@ public class AntiAlignmentILPCalculator {
 
 		int row = 2 * places + 2;
 
-		int maxLengthX = maxLength / 2 + maxLength % 2;
-		int maxLengthY = maxLength - maxLengthX;
 		for (int t = 0; t < log.length; t++) {
 			// what's the hamming distance of the x's to trace t[0..maxLengthX]?
 			for (int e = 0; e < maxLengthX; e++) {
@@ -689,7 +712,8 @@ public class AntiAlignmentILPCalculator {
 		return lp;
 	}
 
-	protected double[] solveForSplit(LPMatrix lpMatrix, String filename) throws LpSolveException, GRBException {
+	protected void solveForSplit(LPMatrix lpMatrix, String filename, double[] vars) throws LpSolveException,
+			GRBException {
 
 		//		System.out.print("Pushing to Solver .... ");
 
@@ -698,7 +722,6 @@ public class AntiAlignmentILPCalculator {
 
 		//		System.out.println("Done");
 		try {
-			double[] vars = new double[lpMatrix.getNcolumns()];
 			if (filename != null) {
 				//				lp.writeMps(filename);
 			} else {
@@ -727,7 +750,6 @@ public class AntiAlignmentILPCalculator {
 				//				System.out.println(Arrays.toString(vars));
 
 			}
-			return vars;
 		} finally {
 			grbModel.dispose();
 			//			lp.deleteAndRemoveLp();
