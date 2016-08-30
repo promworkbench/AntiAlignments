@@ -1,8 +1,6 @@
 package org.processmining.antialignments.algorithm;
 
-import gnu.trove.list.TIntList;
 import gnu.trove.list.TShortList;
-import gnu.trove.list.array.TIntArrayList;
 import gnu.trove.list.array.TShortArrayList;
 import gnu.trove.map.TObjectShortMap;
 import gnu.trove.map.TShortObjectMap;
@@ -12,6 +10,8 @@ import gurobi.GRBEnv;
 import gurobi.GRBException;
 import gurobi.GRBModel;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Vector;
 
 import lpsolve.LpSolve;
@@ -44,12 +44,12 @@ public class AntiAlignmentILPCalculator {
 
 	private short[] trans2label;
 	private final short[][] log;
-	private final int maxLength;
 	private final int maxFactor;
 
 	private final GRBEnv gbEnv;
 	private TObjectShortHashMap<Object> trans2int;
 	private TObjectShortHashMap<Object> place2int;
+	private final int maxLength;
 
 	public AntiAlignmentILPCalculator(Petrinet net, Marking initialMarking, Marking finalMarking,
 			TObjectShortMap<String> label2short, TShortObjectMap<String> short2label, short[][] log, int maxLength,
@@ -71,59 +71,64 @@ public class AntiAlignmentILPCalculator {
 		gbEnv = new GRBEnv();
 		gbEnv.set(GRB.IntParam.OutputFlag, 0);
 
-		TIntList firingSequence = new TIntArrayList(maxLength * maxFactor);
-		solveByDrillingDown(maxLength * maxFactor, initialMarking, finalMarking, firingSequence);
+		List<Transition> firingSequence = new ArrayList<Transition>(maxLength * maxFactor);
+		solveByDrillingDown(maxLength * maxFactor, initialMarking, finalMarking, firingSequence, 0);
 		System.out.println(firingSequence);
 
 	}
 
 	protected void solveByDrillingDown(int maxLength, Marking initialMarking, Marking finalMarking,
-			TIntList firingSequence) throws LpSolveException, GRBException {
+			List<Transition> firingSequence, int startTracesAt) throws LpSolveException, GRBException {
 
 		System.out
 				.println("Solving maxlength " + maxLength + " from marking " + initialMarking + " to " + finalMarking);
-		if (maxLength > 3) {
+		if (maxLength > 10) {
 
 			int maxLengthX = maxLength / 2 + maxLength % 2;
 			int maxLengthY = maxLength - maxLengthX;
 
-			LPMatrix matrix = setupLpForSplit(maxLengthX, maxLengthY, true, initialMarking, finalMarking);
+			LPMatrix matrix = setupLpForSplit(maxLengthX, maxLengthY, true, initialMarking, finalMarking, startTracesAt);
 			double[] vars = new double[matrix.getNcolumns()];
 
 			Marking intermediate = determineSplitMarking(matrix, vars);
 
 			System.out.println("Intermediate marking: " + intermediate);
 			if (!intermediate.equals(initialMarking)) {
-				solveByDrillingDown(maxLength / 2 + maxLength % 2, initialMarking, intermediate, firingSequence);
+				solveByDrillingDown(maxLength / 2 + maxLength % 2, initialMarking, intermediate, firingSequence,
+						startTracesAt);
 				if (!intermediate.equals(finalMarking)) {
-					solveByDrillingDown(maxLength / 2, intermediate, finalMarking, firingSequence);
+					solveByDrillingDown(maxLength / 2, intermediate, finalMarking, firingSequence, startTracesAt
+							+ maxLengthX);
 				}
 			} else {
 				// Initial Marking is kept intact. Possible spurious trace, or transition invariant detected
 				// Now do 1+ rest search.
-				matrix = setupLpForSplit(1, maxLength - 1, true, initialMarking, finalMarking);
+				matrix = setupLpForSplit(1, maxLength - 1, true, initialMarking, finalMarking, startTracesAt);
 				intermediate = determineSplitMarking(matrix, vars);
 				for (int t = 0; t < transitions; t++) {
 					if (vars[t] > 0.5) {
-						assert ((int) (vars[t] + 0.5)) == 1;
-						firingSequence.add(t % transitions);
+						assert ((int) (vars[t] + 0.5)) == 1 || short2trans[t].isInvisible();
+						do {
+							firingSequence.add(short2trans[t % transitions]);
+							vars[t] = vars[t] - 1;
+						} while (vars[t] > 0.5);
 					}
 				}
 
 				if (!intermediate.equals(finalMarking)) {
-					solveByDrillingDown(maxLength - 1, intermediate, finalMarking, firingSequence);
+					solveByDrillingDown(maxLength - 1, intermediate, finalMarking, firingSequence, startTracesAt + 1);
 				}
 			}
 
 		} else {
-			LPMatrix matrix = setupLpForFullSequence(maxLength, true, initialMarking, finalMarking);
+			LPMatrix matrix = setupLpForFullSequence(maxLength, true, initialMarking, finalMarking, startTracesAt);
 			//			matrix.printLp();
 			double[] vars = new double[matrix.getNcolumns()];
 			solveForFullSequence(matrix, -1, maxLength, null, vars);
 			for (int t = 0; t < vars.length - 2; t++) {
 				if (vars[t] > 0.5) {
 					assert ((int) (vars[t] + 0.5)) == 1;
-					firingSequence.add(t % transitions);
+					firingSequence.add(short2trans[t % transitions]);
 				}
 			}
 			//			System.out.println(Arrays.toString(vars));
@@ -158,7 +163,7 @@ public class AntiAlignmentILPCalculator {
 			GRBException {
 
 		System.out.println("Setting up LP");
-		LPMatrix lpMatrix = setupLpForFullSequence(maxLength * maxFactor, true, initialMarking, finalMarking);
+		LPMatrix lpMatrix = setupLpForFullSequence(maxLength * maxFactor, true, initialMarking, finalMarking, 0);
 
 		System.out.println("IP with " + lpMatrix.getNcolumns() + " columns and " + lpMatrix.getNrows() + " rows.");
 
@@ -367,7 +372,7 @@ public class AntiAlignmentILPCalculator {
 	}
 
 	protected LPMatrix setupLpForFullSequence(int maxLength, boolean integerVariables, Marking initialMarking,
-			Marking finalMarking) throws LpSolveException {
+			Marking finalMarking, int startTracesAt) throws LpSolveException {
 
 		//		LpSolve lp = LpSolve.makeLp((maxLength + 1) * places + 2 * maxLength + log.length, transitions * maxLength + 2);
 		LPMatrix lp = new LPMatrix((maxLength + 1) * places + 2 * maxLength + log.length, transitions * maxLength + 2);
@@ -455,7 +460,7 @@ public class AntiAlignmentILPCalculator {
 		row = places * (maxLength + 1) + 2 * maxLength - 1;
 		for (int t = 0; t < log.length; t++) {
 			// what's the hamming distance of the x's to trace t?
-			for (int e = 0; e < maxLength; e++) {
+			for (int e = startTracesAt; e < maxLength; e++) {
 				for (int tr = 0; tr < trans2label.length; tr++) {
 					if (e >= log[t].length && trans2label[tr] > 0) {
 						lp.setMat(row + t, e * transitions + tr, 1);
@@ -552,7 +557,7 @@ public class AntiAlignmentILPCalculator {
 	}
 
 	protected LPMatrix setupLpForSplit(int maxLengthX, int maxLengthY, boolean integerVariables,
-			Marking initialMarking, Marking finalMarking) throws LpSolveException {
+			Marking initialMarking, Marking finalMarking, int startTracesAt) throws LpSolveException {
 
 		//		LpSolve lp = LpSolve.makeLp((maxLength + 1) * places + 2 * maxLength + log.length, transitions * maxLength + 2);
 		LPMatrix lp = new LPMatrix(2 * places + 2 * log.length + 2, transitions * 2 + 2);
@@ -621,7 +626,7 @@ public class AntiAlignmentILPCalculator {
 
 		for (int t = 0; t < log.length; t++) {
 			// what's the hamming distance of the x's to trace t[0..maxLengthX]?
-			for (int e = 0; e < maxLengthX; e++) {
+			for (int e = startTracesAt; e < startTracesAt + maxLengthX; e++) {
 				for (int tr = 0; tr < trans2label.length; tr++) {
 					if (e >= log[t].length && trans2label[tr] > 0) {
 						lp.setMat(row + 2 * t, tr, lp.getMat(row + 2 * t, tr) + 1);
@@ -641,7 +646,7 @@ public class AntiAlignmentILPCalculator {
 					}
 				}
 			}
-			for (int e = maxLengthX; e < maxLength; e++) {
+			for (int e = startTracesAt + maxLengthX; e < maxLengthX + maxLengthY; e++) {
 				for (int tr = 0; tr < trans2label.length; tr++) {
 					if (e >= log[t].length && trans2label[tr] > 0) {
 						lp.setMat(row + 2 * t + 1, transitions + tr, lp.getMat(row + 2 * t + 1, tr) + 1);
@@ -671,10 +676,10 @@ public class AntiAlignmentILPCalculator {
 
 		// maximize h
 		lp.setColName(2 * transitions, "HX");
-		lp.setObjective(2 * transitions, maxLength * maxLength);
+		lp.setObjective(2 * transitions, maxLengthX * maxLengthX);
 		// maximize g
 		lp.setColName(2 * transitions + 1, "HY");
-		lp.setObjective(2 * transitions + 1, maxLength * maxLength);
+		lp.setObjective(2 * transitions + 1, maxLengthY * maxLengthY);
 
 		lp.setMaxim();
 
