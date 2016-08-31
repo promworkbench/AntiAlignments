@@ -14,12 +14,12 @@ import lpsolve.LpSolveException;
 
 public class LPMatrix {
 
-	public static final int INFEASIBLE = 0;
+	public static final int INFEASIBLE = 1;
 	public static final int OPTIMAL = 0;
 	public static int GE = LpSolve.GE;
 	public static int LE = LpSolve.LE;
 	public static int EQ = LpSolve.EQ;
-	public static double INFINITE = 1.0e10;
+	public static double INFINITE = 1.0e30;
 
 	private final double[][] matrix;
 	private final double[] rhs;

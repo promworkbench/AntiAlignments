@@ -178,8 +178,8 @@ public class AntiAlignmentPlugin {
 
 		mid = System.nanoTime();
 		//		AntiAlignments aa2 = calculator.getAntiAlignments(alignedLog, max, maxFactor);
-		aa = new DepthFirstTraceSearch(net, initialMarking, finalMarking, label2short).getAntiAlignments(alignedLog,
-				max, maxFactor, new DistanceMetric.Hamming());
+		//		aa = new DepthFirstTraceSearch(net, initialMarking, finalMarking, label2short).getAntiAlignments(alignedLog,
+		//				max, maxFactor, new DistanceMetric.Hamming());
 
 		long end = System.nanoTime();
 
@@ -361,7 +361,7 @@ public class AntiAlignmentPlugin {
 
 		}
 
-		double d = Math.min(aa.getAAForLog().length, max * maxFactor);
+		double d = Math.max(aa.getAAForLog().length, aa.getMaxDistanceForLog());
 		double aaDistance = d < 1 ? 1 : aa.getAADistanceForLog() / d;
 		assert 0 <= aaDistance && aaDistance <= 1;
 		// double recDistance = newStateCounts[t] == 0 ? 0 : recDistances[t]
@@ -421,12 +421,29 @@ public class AntiAlignmentPlugin {
 		int count = 0;
 		int maxRecDist = 0;
 		int sumRecDist = 0;
-		for (Transition t : firingSequence) {
+		for (int t_i = 0; t_i < firingSequence.size(); t_i++) {
+			Transition t = firingSequence.get(t_i);
 			try {
 				semantics.executeExecutableTransition(t);
 				length--;
 			} catch (IllegalTransitionException e) {
-				e.printStackTrace();
+				// so this transition was not enabled.
+				assert (t.isInvisible());
+				// push forward to first visible transition
+				int j;
+				for (j = t_i + 1; j < firingSequence.size(); j++) {
+					if (firingSequence.get(j).isInvisible()) {
+						firingSequence.set(j - 1, firingSequence.get(j));
+					} else {
+						firingSequence.set(j - 1, t);
+					}
+				}
+				if (j == firingSequence.size()) {
+					firingSequence.set(j - 1, t);
+				}
+				t_i--;
+				continue;
+
 			}
 			TShortSet set = statesVisitedPerTrace.get(semantics.getCurrentState());
 			if (set == null || (set.size() == 1 && set.contains(indexToIgnore))) {
