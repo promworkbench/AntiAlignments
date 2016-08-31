@@ -5,8 +5,11 @@ import gnu.trove.list.array.TShortArrayList;
 import gnu.trove.map.TObjectShortMap;
 import gnu.trove.map.TShortObjectMap;
 import gnu.trove.map.hash.TObjectShortHashMap;
+import gurobi.GRB;
 import gurobi.GRBEnv;
+import gurobi.GRBException;
 
+import java.io.IOException;
 import java.util.Vector;
 
 import lpsolve.LpSolve;
@@ -53,6 +56,8 @@ public class AntiAlignmentILPCalculator {
 	private final int maxLength;
 	private short invisibleTransitions;
 
+	private int cutOffLength = 5;
+
 	public AntiAlignmentILPCalculator(Petrinet net, Marking initialMarking, Marking finalMarking,
 			TObjectShortMap<String> label2short, TShortObjectMap<String> short2label, short[][] log, int maxLength,
 			int maxFactor) {
@@ -71,13 +76,13 @@ public class AntiAlignmentILPCalculator {
 		setupDataStructures();
 
 		mode = MODE_LPSOLVE;
-		//		try {
-		//			gbEnv = new GRBEnv();
-		//			gbEnv.set(GRB.IntParam.OutputFlag, 0);
-		//			mode = MODE_GUROBI;
-		//		} catch (GRBException e) {
-		//		mode = MODE_LPSOLVE;
-		//		}
+		try {
+			gbEnv = new GRBEnv();
+			gbEnv.set(GRB.IntParam.OutputFlag, 0);
+			mode = MODE_GUROBI;
+		} catch (GRBException e) {
+			mode = MODE_LPSOLVE;
+		}
 
 	}
 
@@ -89,9 +94,9 @@ public class AntiAlignmentILPCalculator {
 			System.out.println("Solving maxlength " + maxLength + " from marking " + initialMarking + " to "
 					+ finalMarking);
 		}
-		if (maxLength > 4) {
+		if (maxLength > cutOffLength) {
 
-			int lengthX = maxLength / 2 + maxLength % 2;
+			int lengthX = cutOffLength;
 			int maxLengthY = maxLength - lengthX;
 
 			LPMatrix<?> matrix = setupLpForSplit(lengthX, maxLengthY, true, initialMarking, finalMarking,
@@ -255,9 +260,41 @@ public class AntiAlignmentILPCalculator {
 		}
 	}
 
-	public AntiAlignments getAntiAlignments(Marking initialMarking, Marking finalMarking) throws LPMatrixException {
+	public void doAntiAlignmentTest(Marking initialMarking, Marking finalMarking) throws LPMatrixException {
+		VERBOSE = false;
 
-		System.out.println("Solving by drilling down");
+		cutOffLength = 1;
+		System.out.println("mode;cutOffLength;time(ms);Dlog");
+		while (cutOffLength < maxLength * maxFactor) {
+			cutOffLength += 4;
+			Vector<Transition> firingSequence = new Vector<Transition>(maxLength * maxFactor);
+			TShortList antiAlignment = new TShortArrayList(maxLength * maxFactor);
+			long start = System.currentTimeMillis();
+			solveByDrillingDown(maxLength * maxFactor, initialMarking, finalMarking, firingSequence, antiAlignment, -1,
+					0);
+			long end = System.currentTimeMillis();
+
+			short[] aa = antiAlignment.toArray();
+			int hd = getMinimalHammingDistanceToLog(aa, log, -1);
+
+			System.out.println((mode == MODE_GUROBI ? "Gurobi" : "LpSolve") + ";" + cutOffLength + ";" + (end - start)
+					+ ";" + hd);
+
+		}
+		System.out.println("done");
+		try {
+			System.in.read();
+		} catch (IOException e) {
+		}
+		//		System.exit(0);
+	}
+
+	public AntiAlignments getAntiAlignments(Marking initialMarking, Marking finalMarking) throws LPMatrixException {
+		doAntiAlignmentTest(initialMarking, finalMarking);
+
+		if (VERBOSE) {
+			System.out.println("Solving by drilling down");
+		}
 
 		Vector<Transition> firingSequence = new Vector<Transition>(maxLength * maxFactor);
 		TShortList antiAlignment = new TShortArrayList(maxLength * maxFactor);
@@ -272,11 +309,12 @@ public class AntiAlignmentILPCalculator {
 
 		final AntiAlignments antiAlignments = new AntiAlignments(log.length);
 
-		System.out.println("-----------------------------------------------");
-		System.out.println("Whole log. ");
-		System.out.println("Maxlength: " + maxFactor * maxLength);
-		System.out.flush();
-
+		if (VERBOSE) {
+			System.out.println("-----------------------------------------------");
+			System.out.println("Whole log. ");
+			System.out.println("Maxlength: " + maxFactor * maxLength);
+			System.out.flush();
+		}
 		//		lp.printLp();
 		//		double[] result = new double[lpMatrix.getNcolumns()];
 		//		solveForFullSequence(lpMatrix, -1, maxFactor * maxLength, null, result);// "D:/temp/antialignment/ilp_instance_log.mps");
@@ -285,21 +323,23 @@ public class AntiAlignmentILPCalculator {
 		antiAlignments.getAntiAlignments()[log.length] = aa;
 		antiAlignments.getTraces()[log.length] = firingSequence;
 		antiAlignments.getMaxDistances()[log.length] = Math.max(getMaxTraceLength(-1), aa.length);
-		System.out.println("Anti alignment: " + toString(aa));
-		System.out.println("Firing Sequence: " + firingSequence);
-		System.out.println("Dlog: " + hd);
-		System.out.flush();
-
+		if (VERBOSE) {
+			System.out.println("Anti alignment: " + toString(aa));
+			System.out.println("Firing Sequence: " + firingSequence);
+			System.out.println("Dlog: " + hd);
+			System.out.flush();
+		}
 		//		int[] basis = new int[lp.getNrows() + lp.getNcolumns() + 1];
 		//		lp.getBasis(basis, true);
 
 		for (int t = 0; t < log.length; t++) {
-			System.out.println("-----------------------------------------------" + (t + 1) + " / " + log.length);
-			System.out.println("Removed Trace: " + toString(log[t]));
-			System.out.println("Maxlength: " + maxFactor * log[t].length);
-			System.out.flush();
-			//			lp.setBasis(basis, true);
-			//			solveForFullSequence(lpMatrix, t, maxFactor * log[t].length, null, result);//, "D:/temp/antialignment/ilp_instance_t" + t + ".mps");
+			if (VERBOSE) {
+				System.out.println("-----------------------------------------------" + (t + 1) + " / " + log.length);
+				System.out.println("Removed Trace: " + toString(log[t]));
+				System.out.println("Maxlength: " + maxFactor * log[t].length);
+				System.out.flush();
+			} //			lp.setBasis(basis, true);
+				//			solveForFullSequence(lpMatrix, t, maxFactor * log[t].length, null, result);//, "D:/temp/antialignment/ilp_instance_t" + t + ".mps");
 
 			firingSequence = new Vector<Transition>(maxLength * maxFactor);
 			antiAlignment = new TShortArrayList(maxLength * maxFactor);
@@ -314,14 +354,16 @@ public class AntiAlignmentILPCalculator {
 			antiAlignments.getMaxDistances()[t] = Math.max(getMaxTraceLength(t), aa.length);
 			antiAlignments.getTraces()[t] = firingSequence;
 			antiAlignments.getTraceDistances()[t] = getHammingDistanceToTrace(aa, log[t]);
-			System.out.println("Anti alignment: " + toString(aa));
-			System.out.println("Firing Sequence: " + firingSequence);
-			System.out.println("Dlog: " + hd + "  Drem: " + antiAlignments.getTraceDistances()[t]);
-			System.out.flush();
-
+			if (VERBOSE) {
+				System.out.println("Anti alignment: " + toString(aa));
+				System.out.println("Firing Sequence: " + firingSequence);
+				System.out.println("Dlog: " + hd + "  Drem: " + antiAlignments.getTraceDistances()[t]);
+				System.out.flush();
+			}
 		}
-		System.out.println("-----------------------------------------------");
-
+		if (VERBOSE) {
+			System.out.println("-----------------------------------------------");
+		}
 		//		System.out.println(Arrays.toString(vars));
 
 		return antiAlignments;
