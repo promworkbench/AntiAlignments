@@ -11,7 +11,6 @@ import gnu.trove.map.hash.TObjectShortHashMap;
 import gnu.trove.map.hash.TShortObjectHashMap;
 import gnu.trove.set.TShortSet;
 import gnu.trove.set.hash.TShortHashSet;
-import gurobi.GRBException;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -21,12 +20,12 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Vector;
 
-import lpsolve.LpSolveException;
 import nl.tue.astar.AStarException;
 
 import org.deckfour.xes.classification.XEventClass;
 import org.deckfour.xes.model.XLog;
 import org.processmining.antialignments.algorithm.AntiAlignmentILPCalculator;
+import org.processmining.antialignments.algorithm.LPMatrix.LPMatrixException;
 import org.processmining.antialignments.pathfinder.AntiAlignments;
 import org.processmining.contexts.uitopia.UIPluginContext;
 import org.processmining.contexts.uitopia.annotations.UITopiaVariant;
@@ -163,16 +162,8 @@ public class AntiAlignmentPlugin {
 		max *= 2 * maxFactor;
 
 		AntiAlignmentILPCalculator calculator2 = null;
-		try {
-			calculator2 = new AntiAlignmentILPCalculator(net, initialMarking, finalMarking, label2short, short2label,
-					alignedLog, max, maxFactor);
-		} catch (LpSolveException e1) {
-			// TODO Auto-generated catch block
-			e1.printStackTrace();
-		} catch (GRBException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
+		calculator2 = new AntiAlignmentILPCalculator(net, initialMarking, finalMarking, label2short, short2label,
+				alignedLog, max, maxFactor);
 
 		AntiAlignments aa;
 
@@ -181,12 +172,10 @@ public class AntiAlignmentPlugin {
 		AntiAlignments aa3 = null;
 		try {
 			aa3 = calculator2.getAntiAlignments(initialMarking, finalMarking);
-		} catch (LpSolveException e) {
+		} catch (LPMatrixException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
-		} catch (GRBException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+
 		}
 
 		long mid = System.nanoTime();

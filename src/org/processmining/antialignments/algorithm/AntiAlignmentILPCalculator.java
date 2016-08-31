@@ -5,16 +5,13 @@ import gnu.trove.list.array.TShortArrayList;
 import gnu.trove.map.TObjectShortMap;
 import gnu.trove.map.TShortObjectMap;
 import gnu.trove.map.hash.TObjectShortHashMap;
-import gurobi.GRB;
 import gurobi.GRBEnv;
-import gurobi.GRBException;
-import gurobi.GRBModel;
 
 import java.util.Vector;
 
 import lpsolve.LpSolve;
-import lpsolve.LpSolveException;
 
+import org.processmining.antialignments.algorithm.LPMatrix.LPMatrixException;
 import org.processmining.antialignments.pathfinder.AntiAlignments;
 import org.processmining.models.graphbased.directed.petrinet.Petrinet;
 import org.processmining.models.graphbased.directed.petrinet.PetrinetEdge;
@@ -31,6 +28,10 @@ public class AntiAlignmentILPCalculator {
 
 	public static boolean VERBOSE = false;
 
+	private static final int MODE_LPSOLVE = 1;
+	private static final int MODE_GUROBI = 2;
+	private int mode;
+
 	private final Petrinet net;
 	//	private final Marking initialMarking;
 	private final PetrinetSemantics semantics;
@@ -46,7 +47,7 @@ public class AntiAlignmentILPCalculator {
 	private final short[][] log;
 	private final int maxFactor;
 
-	private final GRBEnv gbEnv;
+	private GRBEnv gbEnv;
 	private TObjectShortHashMap<Object> trans2int;
 	private TObjectShortHashMap<Object> place2int;
 	private final int maxLength;
@@ -54,7 +55,7 @@ public class AntiAlignmentILPCalculator {
 
 	public AntiAlignmentILPCalculator(Petrinet net, Marking initialMarking, Marking finalMarking,
 			TObjectShortMap<String> label2short, TShortObjectMap<String> short2label, short[][] log, int maxLength,
-			int maxFactor) throws LpSolveException, GRBException {
+			int maxFactor) {
 		this.net = net;
 		//		this.initialMarking = initialMarking;
 		//		this.finalMarking = finalMarking;
@@ -69,14 +70,20 @@ public class AntiAlignmentILPCalculator {
 
 		setupDataStructures();
 
-		gbEnv = new GRBEnv();
-		gbEnv.set(GRB.IntParam.OutputFlag, 0);
+		mode = MODE_LPSOLVE;
+		//		try {
+		//			gbEnv = new GRBEnv();
+		//			gbEnv.set(GRB.IntParam.OutputFlag, 0);
+		//			mode = MODE_GUROBI;
+		//		} catch (GRBException e) {
+		//		mode = MODE_LPSOLVE;
+		//		}
 
 	}
 
 	protected void solveByDrillingDown(int maxLength, Marking initialMarking, Marking finalMarking,
 			final Vector<Transition> firingSequence, final TShortList antiAlignment, final int traceToIgnore,
-			int startTracesAt) throws LpSolveException, GRBException {
+			int startTracesAt) throws LPMatrixException {
 
 		if (VERBOSE) {
 			System.out.println("Solving maxlength " + maxLength + " from marking " + initialMarking + " to "
@@ -87,8 +94,8 @@ public class AntiAlignmentILPCalculator {
 			int lengthX = maxLength / 2 + maxLength % 2;
 			int maxLengthY = maxLength - lengthX;
 
-			LPMatrix matrix = setupLpForSplit(lengthX, maxLengthY, true, initialMarking, finalMarking, traceToIgnore,
-					startTracesAt);
+			LPMatrix<?> matrix = setupLpForSplit(lengthX, maxLengthY, true, initialMarking, finalMarking,
+					traceToIgnore, startTracesAt);
 			double[] vars = new double[matrix.getNcolumns()];
 
 			// Determine an intermediate marking at lengthX visible steps
@@ -157,7 +164,7 @@ public class AntiAlignmentILPCalculator {
 					// try invisible steps :)
 					matrix = setupLpForFinalInvisibleSteps(true, initialMarking, finalMarking);
 					vars = new double[matrix.getNcolumns()];
-					int result = solveForFinalInvisibleSteps(matrix, null, vars);
+					int result = matrix.solve(vars);
 					if (result != LPMatrix.OPTIMAL) {
 						// Cannot reach the final marking with invisible steps. Error :)
 						System.out.println("Cannot reach the final marking " + finalMarking + " from " + initialMarking
@@ -186,7 +193,7 @@ public class AntiAlignmentILPCalculator {
 			}
 
 		} else {
-			LPMatrix matrix = setupLpForFullSequence(maxLength, true, initialMarking, finalMarking, traceToIgnore,
+			LPMatrix<?> matrix = setupLpForFullSequence(maxLength, true, initialMarking, finalMarking, traceToIgnore,
 					startTracesAt);
 			//			matrix.printLp();
 			int length = 0;
@@ -220,13 +227,13 @@ public class AntiAlignmentILPCalculator {
 
 	}
 
-	protected Marking determineSplitMarking(LPMatrix matrix, int traceToIgnore, double[] vars) throws LpSolveException,
-			GRBException {
+	protected Marking determineSplitMarking(LPMatrix<?> matrix, int traceToIgnore, double[] vars)
+			throws LPMatrixException {
 		//			matrix.toLpSolve().printLp();
 
 		//			matrix.printLp();
 
-		int result = solveForSplit(matrix, null, vars);
+		int result = matrix.solve(vars);
 
 		if (result == LPMatrix.OPTIMAL) {
 			// get the intermediate marking:
@@ -248,8 +255,7 @@ public class AntiAlignmentILPCalculator {
 		}
 	}
 
-	public AntiAlignments getAntiAlignments(Marking initialMarking, Marking finalMarking) throws LpSolveException,
-			GRBException {
+	public AntiAlignments getAntiAlignments(Marking initialMarking, Marking finalMarking) throws LPMatrixException {
 
 		System.out.println("Solving by drilling down");
 
@@ -359,27 +365,8 @@ public class AntiAlignmentILPCalculator {
 		return hdt;
 	}
 
-	private Vector<?> getFiringSequence(double[] result) {
-		// TODO Auto-generated method stub
-		return null;
-	}
-
-	private short[] getAntiAlignment(double[] result) {
-		TShortList list = new TShortArrayList();
-		for (int i = 0; i < result.length - 2; i++) {
-			if (result[i] > 0.5) {
-				// fired transition.
-				short trans = (short) (i % trans2label.length);
-				if (trans2label[trans] >= 0) {
-					list.add(trans2label[trans]);
-				}
-			}
-		}
-		return list.toArray();
-	}
-
-	protected int solveForFullSequence(LPMatrix lpMatrix, int traceToIgnore, int maxLength, String filename,
-			double[] vars) throws LpSolveException, GRBException {
+	protected int solveForFullSequence(LPMatrix<?> lpMatrix, int traceToIgnore, int maxLength, String filename,
+			double[] vars) throws LPMatrixException {
 
 		int row;
 
@@ -395,79 +382,20 @@ public class AntiAlignmentILPCalculator {
 		}
 		lpMatrix.setRh(lpMatrix.getNrows() - 1, maxLength);
 
-		//		lp.printLp();
-		//		System.out.print("Pushing to Solver .... ");
-
-		//		LpSolve lp = lpMatrix.toLpSolve();
-		GRBModel grbModel = lpMatrix.toGurobi(gbEnv);
-
-		//		System.out.println("Done");
+		int result;
 		try {
-			int result = -1;
-			if (filename != null) {
-				//				lp.writeMps(filename);
-			} else {
-
-				//				lp.printLp();
-
-				//				result = lp.solve();
-
-				grbModel.optimize();
-
-				//				if (result == lp.INFEASIBLE) {
-				//					System.out.println("Result: INFEASIBLE");
-				//				} else if (result == lpMatrix.OPTIMAL) {
-				//					System.out.println("Result: OPTIMAL");
-				//				} else {
-				//					System.out.println("Result: " + result);
-				//				}
-				//
-				//				lp.getVariables(vars);
-
-				int optResult;
-				if (grbModel.get(GRB.IntAttr.Status) == GRB.Status.OPTIMAL) {
-
-					for (int j = 0; j < vars.length; j++)
-						vars[j] = grbModel.getVars()[j].get(GRB.DoubleAttr.X);
-					optResult = LPMatrix.OPTIMAL;
-				} else if (grbModel.get(GRB.IntAttr.Status) == GRB.Status.INFEASIBLE) {
-
-					//					lpMatrix.toLpSolve().writeLp("D:/temp/antialignment/test.lp");
-					//					lpMatrix.toLpSolve().writeMps("D:/temp/antialignment/test.mps");
-					//					System.out.println("INFEASIBLE");
-					optResult = LPMatrix.INFEASIBLE;
-				} else {
-					optResult = -grbModel.get(GRB.IntAttr.Status) - 1;
-				}
-
-				//				for (int i = 0; i < vars.length - 2; i++) {
-				//					if (vars[i] > 0.5) {
-				//						System.out.print(lpMatrix.getColName(i));
-				//						System.out.print("|");
-				//					}
-				//				}
-				//				System.out.print("Dlog: ");
-				//				System.out.print(((int) (vars[vars.length - 2] + .5)));
-				//
-				//				System.out.print(" Drem: ");
-				//				System.out.print(((int) (vars[vars.length - 1] + .5)));
-
-				if (traceToIgnore >= 0) {
-					// minimize h
-					lpMatrix.setMat(row, lpMatrix.getNcolumns() - 2, -1);
-					// ignore g.
-					lpMatrix.setMat(row, lpMatrix.getNcolumns() - 1, 0);
-					lpMatrix.setConstrType(row, LpSolve.GE);
-				}
-				//		lp.printLp();
-				//				System.out.println();
-				return optResult;
-			}
+			result = lpMatrix.solve(vars);
 		} finally {
-			grbModel.dispose();
-			//			lp.deleteAndRemoveLp();
+			if (traceToIgnore >= 0) {
+				// minimize h
+				lpMatrix.setMat(row, lpMatrix.getNcolumns() - 2, -1);
+				// ignore g.
+				lpMatrix.setMat(row, lpMatrix.getNcolumns() - 1, 0);
+				lpMatrix.setConstrType(row, LpSolve.GE);
+			}
 		}
-		return -1;
+		return result;
+
 	}
 
 	protected void setupDataStructures() {
@@ -527,11 +455,11 @@ public class AntiAlignmentILPCalculator {
 		}
 	}
 
-	protected LPMatrix setupLpForFullSequence(int maxLength, boolean integerVariables, Marking initialMarking,
-			Marking finalMarking, int traceToIgnore, int startTracesAt) throws LpSolveException {
+	protected LPMatrix<?> setupLpForFullSequence(int maxLength, boolean integerVariables, Marking initialMarking,
+			Marking finalMarking, int traceToIgnore, int startTracesAt) throws LPMatrixException {
 
 		//		LpSolve lp = LpSolve.makeLp((maxLength + 1) * places + 2 * maxLength + log.length, transitions * maxLength + 2);
-		LPMatrix lp = new LPMatrix((maxLength + 1) * places + 2 * maxLength + log.length, transitions * maxLength
+		LPMatrix<?> lp = setupMatrix((maxLength + 1) * places + 2 * maxLength + log.length, transitions * maxLength
 				+ invisibleTransitions + 2);
 
 		for (PetrinetEdge<? extends PetrinetNode, ? extends PetrinetNode> e : net.getEdges()) {
@@ -732,15 +660,17 @@ public class AntiAlignmentILPCalculator {
 		}
 	}
 
-	protected LPMatrix setupLpForSplit(int maxLengthX, int maxLengthY, boolean integerVariables,
-			Marking initialMarking, Marking finalMarking, int traceToIgnore, int startTracesAt) throws LpSolveException {
+	protected LPMatrix<?> setupLpForSplit(int maxLengthX, int maxLengthY, boolean integerVariables,
+			Marking initialMarking, Marking finalMarking, int traceToIgnore, int startTracesAt) {
 
 		//		LpSolve lp = LpSolve.makeLp((maxLength + 1) * places + 2 * maxLength + log.length, transitions * maxLength + 2);
-		LPMatrix lp = new LPMatrix(2 * places + 2 * log.length + 3, transitions * 2 + 3);
+		LPMatrix<?> lp = setupMatrix(2 * places + 2 * log.length + 3, transitions * 2 + 3);
 
 		for (PetrinetEdge<? extends PetrinetNode, ? extends PetrinetNode> e : net.getEdges()) {
 			short p, t;
 			int dir;
+
+			//TODO: haNDLE INHIBITORS
 			int type = LpSolve.GE;
 			Transition trans;
 			if (e instanceof Arc) {
@@ -898,68 +828,25 @@ public class AntiAlignmentILPCalculator {
 		return lp;
 	}
 
-	protected int solveForSplit(LPMatrix lpMatrix, String filename, double[] vars) throws LpSolveException,
-			GRBException {
-
-		//		System.out.print("Pushing to Solver .... ");
-
-		//		LpSolve lp = lpMatrix.toLpSolve();
-		GRBModel grbModel = lpMatrix.toGurobi(gbEnv);
-
-		//		System.out.println("Done");
-		try {
-			if (filename != null) {
-				//				lp.writeMps(filename);
-			} else {
-
-				//				lp.printLp();
-
-				//				result = lp.solve();
-
-				grbModel.optimize();
-
-				//				if (result == lp.INFEASIBLE) {
-				//					System.out.println("Result: INFEASIBLE");
-				//				} else if (result == lpMatrix.OPTIMAL) {
-				//					System.out.println("Result: OPTIMAL");
-				//				} else {
-				//					System.out.println("Result: " + result);
-				//				}
-				//
-				//				lp.getVariables(vars);
-
-				if (grbModel.get(GRB.IntAttr.Status) == GRB.Status.OPTIMAL) {
-
-					for (int j = 0; j < vars.length; j++)
-						vars[j] = grbModel.getVars()[j].get(GRB.DoubleAttr.X);
-					return LPMatrix.OPTIMAL;
-				} else if (grbModel.get(GRB.IntAttr.Status) == GRB.Status.INFEASIBLE
-						|| grbModel.get(GRB.IntAttr.Status) == GRB.Status.INF_OR_UNBD) {
-					return LPMatrix.INFEASIBLE;
-
-				} else {
-					return -grbModel.get(GRB.IntAttr.Status) - 1;
-				}
-				//				System.out.println(Arrays.toString(vars));
-
-			}
-		} finally {
-			grbModel.dispose();
-			//			lp.deleteAndRemoveLp();
+	private LPMatrix<?> setupMatrix(int rows, int columns) {
+		if (mode == MODE_GUROBI) {
+			return new LPMatrix.GUROBI(gbEnv, rows, columns);
+		} else {
+			return new LPMatrix.LPSOLVE(rows, columns);
 		}
-		return -1;
-
 	}
 
-	protected LPMatrix setupLpForFinalInvisibleSteps(boolean integerVariables, Marking initialMarking,
+	protected LPMatrix<?> setupLpForFinalInvisibleSteps(boolean integerVariables, Marking initialMarking,
 			Marking finalMarking) {
 
 		//		LpSolve lp = LpSolve.makeLp((maxLength + 1) * places + 2 * maxLength + log.length, transitions * maxLength + 2);
-		LPMatrix lp = new LPMatrix(places, invisibleTransitions);
+		LPMatrix<?> lp = setupMatrix(places, invisibleTransitions);
 
 		for (PetrinetEdge<? extends PetrinetNode, ? extends PetrinetNode> e : net.getEdges()) {
 			short p, t;
 			int dir;
+
+			//TODO: Handle Inhibitors
 			int type = LpSolve.GE;
 			Transition trans;
 			if (e instanceof Arc) {
@@ -1018,54 +905,4 @@ public class AntiAlignmentILPCalculator {
 		return lp;
 	}
 
-	protected int solveForFinalInvisibleSteps(LPMatrix lpMatrix, String filename, double[] vars)
-			throws LpSolveException, GRBException {
-
-		//		System.out.print("Pushing to Solver .... ");
-
-		//		LpSolve lp = lpMatrix.toLpSolve();
-		GRBModel grbModel = lpMatrix.toGurobi(gbEnv);
-
-		//		System.out.println("Done");
-		try {
-			if (filename != null) {
-				//				lp.writeMps(filename);
-			} else {
-
-				//				lp.printLp();
-
-				//				result = lp.solve();
-
-				grbModel.optimize();
-
-				//				if (result == lp.INFEASIBLE) {
-				//					System.out.println("Result: INFEASIBLE");
-				//				} else if (result == lpMatrix.OPTIMAL) {
-				//					System.out.println("Result: OPTIMAL");
-				//				} else {
-				//					System.out.println("Result: " + result);
-				//				}
-				//
-				//				lp.getVariables(vars);
-
-				if (grbModel.get(GRB.IntAttr.Status) == GRB.Status.OPTIMAL) {
-
-					for (int j = 0; j < vars.length; j++)
-						vars[j] = grbModel.getVars()[j].get(GRB.DoubleAttr.X);
-					return LPMatrix.OPTIMAL;
-				} else if (grbModel.get(GRB.IntAttr.Status) == GRB.Status.INFEASIBLE) {
-					return LPMatrix.INFEASIBLE;
-
-				} else {
-					return -grbModel.get(GRB.IntAttr.Status) - 1;
-				}
-				//				System.out.println(Arrays.toString(vars));
-
-			}
-		} finally {
-			grbModel.dispose();
-			//			lp.deleteAndRemoveLp();
-		}
-		return -1;
-	}
 }
