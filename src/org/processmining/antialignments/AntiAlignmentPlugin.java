@@ -1,9 +1,12 @@
 package org.processmining.antialignments;
 
+import gnu.trove.iterator.TObjectIntIterator;
 import gnu.trove.list.TShortList;
 import gnu.trove.list.array.TShortArrayList;
+import gnu.trove.map.TObjectIntMap;
 import gnu.trove.map.TObjectShortMap;
 import gnu.trove.map.TShortObjectMap;
+import gnu.trove.map.hash.TObjectIntHashMap;
 import gnu.trove.map.hash.TObjectShortHashMap;
 import gnu.trove.map.hash.TShortObjectHashMap;
 import gnu.trove.set.TShortSet;
@@ -11,6 +14,7 @@ import gnu.trove.set.hash.TShortHashSet;
 import gurobi.GRBException;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -127,9 +131,6 @@ public class AntiAlignmentPlugin {
 		double traceFitness = (Double) alignments.getInfo().get(PNRepResult.TRACEFITNESS);
 
 		// Build the aligned event log for anti-alignment computations
-		int[] frequencies = new int[alignments.size()];
-		short[][] alignedLog = new short[alignments.size()][];
-		List[] firingSequences = new List[alignments.size()];
 
 		// We need to rebuild the log using the alignments. The frequencies and alignedlog objects
 		// are filled with fitting traces and firing sequences (including invisible transitions) and 
@@ -137,8 +138,23 @@ public class AntiAlignmentPlugin {
 		TObjectShortMap<String> label2short = new TObjectShortHashMap<>();
 		TShortObjectMap<String> short2label = new TShortObjectHashMap<>();
 
-		int max = rebuildLogFromAlignments(alignments, mapping, frequencies, alignedLog, firingSequences, label2short,
-				short2label);
+		TObjectIntMap<AlignedTrace> alignedTraces = new TObjectIntHashMap<>(alignments.size());
+
+		int max = rebuildLogFromAlignments(alignments, mapping, alignedTraces, label2short, short2label);
+
+		int[] frequencies = new int[alignedTraces.size()];
+		short[][] alignedLog = new short[alignedTraces.size()][];
+		List[] firingSequences = new List[alignedTraces.size()];
+		int i = 0;
+		TObjectIntIterator<AlignedTrace> it = alignedTraces.iterator();
+		while (it.hasNext()) {
+			it.advance();
+			frequencies[i] = it.value();
+			alignedLog[i] = it.key().getModelSequence().toArray();
+			firingSequences[i] = it.key().getFiringSequence();
+			i++;
+		}
+		assert allTracesUnique(alignedLog);
 
 		//		AntiAlignmentCalculator calculator = new AntiAlignmentCalculator(net, initialMarking, finalMarking, label2short);
 
@@ -233,8 +249,20 @@ public class AntiAlignmentPlugin {
 
 	}
 
-	private static int rebuildLogFromAlignments(PNRepResult alignments, TransEvClassMapping mapping, int[] frequencies,
-			short[][] alignedLog, List[] firingSequences, TObjectShortMap<String> label2short,
+	private static boolean allTracesUnique(short[][] alignedLog) {
+		for (int i = 0; i < alignedLog.length; i++) {
+			for (int j = i + 1; j < alignedLog.length; j++) {
+				if (Arrays.equals(alignedLog[i], alignedLog[j])) {
+					return false;
+				}
+
+			}
+		}
+		return true;
+	}
+
+	private static int rebuildLogFromAlignments(PNRepResult alignments, TransEvClassMapping mapping,
+			TObjectIntMap<AlignedTrace> alignedTraces, TObjectShortMap<String> label2short,
 			TShortObjectMap<String> short2label) {
 		// move through alignments and rebuild event log to an aligned version with short labels.
 		// We need to build both an aligned log and aligned firing sequences. The latter includes
@@ -243,23 +271,27 @@ public class AntiAlignmentPlugin {
 		// What is needed here is a consistent mapping from labels in the log to shorts and 
 		// labels in the model to shorts. This mapping has been built internally by the replayer
 		// but is currently not accessible...
-		// Ugly, but map is from both XEventClass and Transition to short
+		// Ugly, but map is from both XEventClass.toString() and Transition.getLabel() to short
 
 		// add all mapped objects first
 		short mapped = 1;
-		for (Entry<Transition, XEventClass> tc : mapping.entrySet()) {
-			label2short.put(tc.getKey().getLabel(), mapped);
-			label2short.put(tc.getValue().toString(), mapped);
-			short2label.put(mapped, tc.getKey().getLabel());
+		for (XEventClass ec : mapping.values()) {
+			label2short.put(ec.toString(), mapped);
+			short2label.put(mapped, ec.toString());
 			mapped++;
+		}
+
+		for (Entry<Transition, XEventClass> entry : mapping.entrySet()) {
+			label2short.putIfAbsent(entry.getKey().getLabel(), label2short.get(entry.getValue().toString()));
 		}
 
 		int max = 0;
 		int i = 0;
 		for (SyncReplayResult alignment : alignments) {
-			frequencies[i] = alignment.getTraceIndex().size();
+			//			frequencies[i] = alignment.getTraceIndex().size();
 
-			firingSequences[i] = new ArrayList<Transition>();
+			ArrayList<Transition> firingSeq = new ArrayList<Transition>();
+			//			firingSequences[i] = new ArrayList<Transition>();
 			TShortList modelSeq = new TShortArrayList();
 			for (int s = 0; s < alignment.getStepTypes().size(); s++) {
 				Transition t = null;
@@ -304,16 +336,19 @@ public class AntiAlignmentPlugin {
 					System.out.println("error");
 				}
 				if (t != null) {
-					firingSequences[i].add(t);
+					firingSeq.add(t);
 
 					if (m != label2short.getNoEntryValue()) {
 						modelSeq.add(m);
 					}
 				}
 			}
-			alignedLog[i] = modelSeq.toArray();
-			if (alignedLog[i].length > max) {
-				max = alignedLog[i].length;
+
+			AlignedTrace at = new AlignedTrace(modelSeq, firingSeq);
+			alignedTraces.adjustOrPutValue(at, alignment.getTraceIndex().size(), alignment.getTraceIndex().size());
+			//			alignedLog[i] = modelSeq.toArray();
+			if (modelSeq.size() > max) {
+				max = modelSeq.size();
 			}
 			i++;
 		}
@@ -436,6 +471,7 @@ public class AntiAlignmentPlugin {
 						firingSequence.set(j - 1, firingSequence.get(j));
 					} else {
 						firingSequence.set(j - 1, t);
+						break;
 					}
 				}
 				if (j == firingSequence.size()) {

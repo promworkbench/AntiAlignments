@@ -36,6 +36,7 @@ public class LPMatrix {
 		matrix = new double[rows][columns];
 		rhs = new double[rows];
 		types = new int[rows];
+		Arrays.fill(types, LPMatrix.EQ);
 		upBo = new double[columns];
 		Arrays.fill(upBo, INFINITE);
 		lowBo = new double[columns];
