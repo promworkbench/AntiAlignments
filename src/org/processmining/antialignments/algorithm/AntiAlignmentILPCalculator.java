@@ -9,7 +9,9 @@ import gurobi.GRB;
 import gurobi.GRBEnv;
 import gurobi.GRBException;
 
-import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Stack;
 import java.util.Vector;
 
 import lpsolve.LpSolve;
@@ -23,13 +25,67 @@ import org.processmining.models.graphbased.directed.petrinet.elements.Arc;
 import org.processmining.models.graphbased.directed.petrinet.elements.InhibitorArc;
 import org.processmining.models.graphbased.directed.petrinet.elements.Place;
 import org.processmining.models.graphbased.directed.petrinet.elements.Transition;
+import org.processmining.models.semantics.IllegalTransitionException;
 import org.processmining.models.semantics.petrinet.Marking;
 import org.processmining.models.semantics.petrinet.PetrinetSemantics;
 import org.processmining.models.semantics.petrinet.impl.PetrinetSemanticsFactory;
 
 public class AntiAlignmentILPCalculator {
 
-	public static boolean VERBOSE = false;
+	public class HybridEquationResult {
+		private final Marking marking;
+		private final int lengthX;
+		private final int lengthY;
+		private final TShortList antiAlignment;
+		private final Stack<Transition> firingSequence;
+
+		public HybridEquationResult(Marking marking, int lengthX, int lengthY, TShortList antiAlignment,
+				Stack<Transition> firingSequence) {
+			this.marking = marking;
+			this.lengthX = lengthX;
+			this.lengthY = lengthY;
+			this.antiAlignment = antiAlignment;
+			this.firingSequence = firingSequence;
+		}
+
+		public Marking getMarking() {
+			return marking;
+		}
+
+		public int getLengthX() {
+			return lengthX;
+		}
+
+		public int getLengthY() {
+			return lengthY;
+		}
+
+		public boolean equals(Object o) {
+			if (o != null && o instanceof HybridEquationResult) {
+				HybridEquationResult h = (HybridEquationResult) o;
+				return h.lengthX == lengthX && h.lengthY == lengthY && h.getMarking().equals(marking);
+			}
+			return false;
+		}
+
+		public int hashCode() {
+			return marking.hashCode() + 31 * lengthX + 31 * 31 * lengthY;
+		}
+
+		public String toString() {
+			return marking.toString() + " Lx: " + lengthX + " Ly: " + lengthY;
+		}
+
+		public TShortList getAntiAlignment() {
+			return antiAlignment;
+		}
+
+		public Stack<Transition> getFiringSequence() {
+			return firingSequence;
+		}
+	}
+
+	public static boolean VERBOSE = true;
 
 	private static final int MODE_LPSOLVE = 1;
 	private static final int MODE_GUROBI = 2;
@@ -86,9 +142,165 @@ public class AntiAlignmentILPCalculator {
 
 	}
 
-	protected void solveByDrillingDown(int maxLength, Marking initialMarking, Marking finalMarking,
-			final Vector<Transition> firingSequence, final TShortList antiAlignment, final int traceToIgnore,
-			int startTracesAt) throws LPMatrixException {
+	protected void solveSequential(int maxLength, Marking initialMarking, Marking finalMarking,
+			final Vector<Transition> firingSequence, final TShortList antiAlignment, final int traceToIgnore)
+			throws LPMatrixException {
+
+		LPMatrix<?> matrix;
+		HybridEquationResult intermediate = new HybridEquationResult(initialMarking, 0, 0, new TShortArrayList(1),
+				new Stack<Transition>());
+		int startTraceAt = 0;
+		int maxLengthY = maxLength - cutOffLength;
+		int maxLengthX = cutOffLength;
+		if (maxLength < cutOffLength) {
+			maxLengthY = 0;
+			maxLengthX = maxLength;
+		}
+		List<HybridEquationResult> splits = new ArrayList<HybridEquationResult>();
+		Marking marking = intermediate.getMarking();
+		splits.add(intermediate);
+
+		do {
+			if (VERBOSE) {
+				System.out.println("Trying to get from " + marking + " to " + finalMarking + " in " + maxLengthX
+						+ " steps and " + maxLengthY + " approximate steps.");
+			}
+
+			if (startTraceAt < 0) {
+				// So we backtracked a bit to far :)
+				System.err.println("HMM");
+			}
+
+			matrix = setupLpForHybrid(maxLengthX, maxLengthY, true, marking, finalMarking, traceToIgnore, startTraceAt);
+			// Determine an intermediate marking at lengthX visible steps
+			HybridEquationResult nextResult = determineSplitMarkingForHybrid(matrix, maxLengthX, maxLengthY == 0);
+
+			if (nextResult == null) {
+				// The model could not be solved, i.e. there is no path from intermediateMarking to the finalMarking in
+				// no more than maxLengthX+maxLengthY steps.
+				// This is where the fun begins....
+				//				((LpSolve) matrix.toSolver()).printLp();
+				System.err.println("HMM");
+			}
+			if (VERBOSE) {
+				System.out.println("Marking reached: " + nextResult.getMarking() + " in " + nextResult.getLengthX()
+						+ " steps and estimating " + nextResult.getLengthY() + " remaining steps.");
+			}
+			if (nextResult.lengthX + nextResult.lengthY < intermediate.getLengthY()) {
+				// nextResult did not live up to its expectations. 
+				// go back one step.
+				if (VERBOSE) {
+					System.out.println("Backtracking since " + (nextResult.lengthX + nextResult.lengthY) + " < "
+							+ intermediate.getLengthY());
+				}
+				// remove the last transition from the stack.
+				Transition last;
+				intermediate.getAntiAlignment().removeAt(intermediate.getAntiAlignment().size() - 1);
+
+				do {
+					last = intermediate.getFiringSequence().pop();
+
+					for (PetrinetEdge<?, ?> e : net.getInEdges(last)) {
+						if (e instanceof Arc) {
+							Arc a = (Arc) e;
+							Place p = (Place) a.getSource();
+							int w = a.getWeight();
+							intermediate.getMarking().add(p, w);
+						}
+					}
+					for (PetrinetEdge<?, ?> e : net.getOutEdges(last)) {
+						if (e instanceof Arc) {
+							Arc a = (Arc) e;
+							Place p = (Place) a.getTarget();
+							int w = a.getWeight();
+							while (w > 0) {
+								intermediate.getMarking().remove(p);
+								w--;
+							}
+						}
+					}
+					// and remove all invisible transitions before, as they belong to the last 
+					// X transition.
+				} while (!intermediate.getFiringSequence().isEmpty()
+						&& intermediate.getFiringSequence().peek().isInvisible());
+
+				// We've removed the last transition in the row, so allow for one more 
+				// transition in Y
+				maxLengthY++;
+				// and include one additional event.
+				startTraceAt--;
+			} else {
+				// Setup for next iteration
+				intermediate = nextResult;
+				splits.add(intermediate);
+				marking = intermediate.getMarking();
+				maxLengthY -= maxLengthX;
+				startTraceAt += maxLengthX;
+			}
+		} while (maxLengthY >= 0 && !intermediate.getMarking().equals(finalMarking));
+
+		if (!intermediate.getMarking().equals(finalMarking)) {
+			splits.add(intermediate);
+			matrix = setupLpForHybrid(maxLengthX + maxLengthY, 0, true, marking, finalMarking, traceToIgnore,
+					startTraceAt);
+			intermediate = determineSplitMarkingForHybrid(matrix, maxLengthX + maxLengthY, true);
+			splits.add(intermediate);
+		}
+
+		assert intermediate.getMarking().equals(finalMarking);
+
+		for (HybridEquationResult r : splits) {
+			antiAlignment.addAll(r.getAntiAlignment());
+			firingSequence.addAll(r.getFiringSequence());
+		}
+
+		if (VERBOSE) {
+			System.out.println("Anti alignment: " + toString(antiAlignment.toArray()));
+			System.out.println("Dlog: " + getMinimalHammingDistanceToLog(antiAlignment.toArray(), log, traceToIgnore));
+			System.out.println("Firing Sequence: " + firingSequence);
+
+			System.out.println(splits);
+		}
+		//		System.out.println("Test");
+
+	}
+
+	private boolean checkFiringSequence(Vector<Transition> firingSequence, Marking initialMarking, Marking finalMarking) {
+
+		PetrinetSemantics semantics = PetrinetSemanticsFactory.regularPetrinetSemantics(Petrinet.class);
+		semantics.initialize(net.getTransitions(), initialMarking);
+
+		for (int t_i = 0; t_i < firingSequence.size(); t_i++) {
+			Transition t = firingSequence.get(t_i);
+			try {
+				semantics.executeExecutableTransition(t);
+			} catch (IllegalTransitionException e) {
+				// so this transition was not enabled.
+				assert (t.isInvisible());
+				// push forward to first visible transition
+				int j;
+				for (j = t_i + 1; j < firingSequence.size(); j++) {
+					if (firingSequence.get(j).isInvisible()) {
+						firingSequence.set(j - 1, firingSequence.get(j));
+					} else {
+						firingSequence.set(j - 1, t);
+						break;
+					}
+				}
+				if (j == firingSequence.size()) {
+					firingSequence.set(j - 1, t);
+				}
+				t_i--;
+				continue;
+			}
+		}
+
+		return semantics.getCurrentState().equals(finalMarking);
+	}
+
+	protected void solveByDrillingDown(final int splitInParts, int maxLength, Marking initialMarking,
+			Marking finalMarking, final Vector<Transition> firingSequence, final TShortList antiAlignment,
+			final int traceToIgnore, int startTracesAt) throws LPMatrixException {
 
 		if (VERBOSE) {
 			System.out.println("Solving maxlength " + maxLength + " from marking " + initialMarking + " to "
@@ -96,7 +308,7 @@ public class AntiAlignmentILPCalculator {
 		}
 		if (maxLength > cutOffLength) {
 
-			int lengthX = cutOffLength;
+			int lengthX = maxLength / splitInParts + (maxLength % splitInParts > 0 ? 1 : 0);
 			int maxLengthY = maxLength - lengthX;
 
 			LPMatrix<?> matrix = setupLpForSplit(lengthX, maxLengthY, true, initialMarking, finalMarking,
@@ -111,11 +323,11 @@ public class AntiAlignmentILPCalculator {
 				if (VERBOSE) {
 					System.out.println("Intermediate marking: " + intermediate);
 				}
-				solveByDrillingDown(lengthX, initialMarking, intermediate, firingSequence, antiAlignment,
+				solveByDrillingDown(splitInParts, lengthX, initialMarking, intermediate, firingSequence, antiAlignment,
 						traceToIgnore, startTracesAt);
 				if (!finalMarking.equals(intermediate)) {
-					solveByDrillingDown(maxLengthY, intermediate, finalMarking, firingSequence, antiAlignment,
-							traceToIgnore, startTracesAt + lengthX);
+					solveByDrillingDown(splitInParts, maxLengthY, intermediate, finalMarking, firingSequence,
+							antiAlignment, traceToIgnore, startTracesAt + lengthX);
 				}
 
 			} else {
@@ -160,8 +372,8 @@ public class AntiAlignmentILPCalculator {
 					}
 					// Continue with the search from intermediate marking
 					if (!intermediate.equals(finalMarking)) {
-						solveByDrillingDown(maxLength - lengthX, intermediate, finalMarking, firingSequence,
-								antiAlignment, traceToIgnore, startTracesAt + 1);
+						solveByDrillingDown(splitInParts, maxLength - lengthX, intermediate, finalMarking,
+								firingSequence, antiAlignment, traceToIgnore, startTracesAt + 1);
 					}
 
 				} else {
@@ -260,48 +472,69 @@ public class AntiAlignmentILPCalculator {
 		}
 	}
 
-	public void doAntiAlignmentTest(Marking initialMarking, Marking finalMarking) throws LPMatrixException {
-		VERBOSE = false;
+	public boolean doAntiAlignmentTest(Marking initialMarking, Marking finalMarking) throws LPMatrixException {
+		VERBOSE = true;
+		mode = MODE_LPSOLVE;
+		mode = MODE_GUROBI;
 
-		cutOffLength = 1;
-		System.out.println("mode;cutOffLength;time(ms);Dlog");
-		while (cutOffLength < maxLength * maxFactor) {
-			cutOffLength += 4;
-			Vector<Transition> firingSequence = new Vector<Transition>(maxLength * maxFactor);
-			TShortList antiAlignment = new TShortArrayList(maxLength * maxFactor);
-			long start = System.currentTimeMillis();
-			solveByDrillingDown(maxLength * maxFactor, initialMarking, finalMarking, firingSequence, antiAlignment, -1,
-					0);
-			long end = System.currentTimeMillis();
+		String sep = "\t";
+		double exp = 1;
+		cutOffLength = 4;
+		int maxCutOffLength = 10;//maxLength * maxFactor
 
-			short[] aa = antiAlignment.toArray();
-			int hd = getMinimalHammingDistanceToLog(aa, log, -1);
+		System.out.println("mode" + sep + "cutOffLength" + sep + "time(ms)" + sep + "Dlog");
+		while (cutOffLength < maxCutOffLength) {
+			cutOffLength += 1;
+			long sum = 0;
+			long dist = 0;
 
-			System.out.println((mode == MODE_GUROBI ? "Gurobi" : "LpSolve") + ";" + cutOffLength + ";" + (end - start)
-					+ ";" + hd);
+			Vector<Transition> firingSequence;
+			TShortList antiAlignment = null;
+
+			for (int i = 0; i < exp; i++) {
+				firingSequence = new Vector<Transition>(maxLength * maxFactor);
+				antiAlignment = new TShortArrayList(maxLength * maxFactor);
+				long start = System.currentTimeMillis();
+				//				solveByDrillingDown(2, maxLength * maxFactor, initialMarking, finalMarking, firingSequence,
+				//						antiAlignment, -1, 0);
+				solveSequential(maxLength * maxFactor, initialMarking, finalMarking, firingSequence, antiAlignment, -1);
+				long end = System.currentTimeMillis();
+				assert checkFiringSequence(firingSequence, initialMarking, finalMarking);
+				sum += end - start;
+
+				short[] aa = antiAlignment.toArray();
+				int hd = getMinimalHammingDistanceToLog(aa, log, -1);
+
+				dist += hd;
+			}
+
+			System.out.println((mode == MODE_GUROBI ? "Gurobi" : "LpSolve") + sep + cutOffLength + sep + (sum / exp)
+					+ sep + (dist / exp));
 
 		}
 		System.out.println("done");
-		try {
-			System.in.read();
-		} catch (IOException e) {
-		}
+		return true;
 		//		System.exit(0);
 	}
 
 	public AntiAlignments getAntiAlignments(Marking initialMarking, Marking finalMarking) throws LPMatrixException {
-		doAntiAlignmentTest(initialMarking, finalMarking);
+		if (doAntiAlignmentTest(initialMarking, finalMarking)) {
+			return null;
+		}
 
 		if (VERBOSE) {
 			System.out.println("Solving by drilling down");
 		}
 
+		cutOffLength = 32;
 		Vector<Transition> firingSequence = new Vector<Transition>(maxLength * maxFactor);
 		TShortList antiAlignment = new TShortArrayList(maxLength * maxFactor);
-		solveByDrillingDown(maxLength * maxFactor, initialMarking, finalMarking, firingSequence, antiAlignment, -1, 0);
+		//		solveByDrillingDown(maxLength * maxFactor, initialMarking, finalMarking, firingSequence, antiAlignment, -1, 0);
+		solveSequential(maxLength * maxFactor, initialMarking, finalMarking, firingSequence, antiAlignment, -1);
 		// FiringSequence and anti-alignment are known, but the distances to the log need to be computed.
 		short[] aa = antiAlignment.toArray();
 		int hd = getMinimalHammingDistanceToLog(aa, log, -1);
+		cutOffLength = 5;
 
 		//		LPMatrix lpMatrix = setupLpForFullSequence(maxLength * maxFactor, true, initialMarking, finalMarking, 0);
 
@@ -343,8 +576,9 @@ public class AntiAlignmentILPCalculator {
 
 			firingSequence = new Vector<Transition>(maxLength * maxFactor);
 			antiAlignment = new TShortArrayList(maxLength * maxFactor);
-			solveByDrillingDown(maxFactor * log[t].length, initialMarking, finalMarking, firingSequence, antiAlignment,
-					t, 0);
+			//			solveByDrillingDown(maxFactor * log[t].length, initialMarking, finalMarking, firingSequence, antiAlignment,
+			//					t, 0);
+			solveSequential(maxFactor * log[t].length, initialMarking, finalMarking, firingSequence, antiAlignment, t);
 			// FiringSequence and anti-alignment are known, but the distances to the log need to be computed.
 			aa = antiAlignment.toArray();
 			hd = getMinimalHammingDistanceToLog(aa, log, t);
@@ -414,7 +648,6 @@ public class AntiAlignmentILPCalculator {
 
 		row = lpMatrix.getNrows() - log.length + traceToIgnore - 1;
 
-		int oldRH = (int) (lpMatrix.getRh(row) + 0.5);
 		if (traceToIgnore >= 0) {
 			// h doesn't matter
 			lpMatrix.setMat(row, lpMatrix.getNcolumns() - 2, 0);
@@ -498,7 +731,7 @@ public class AntiAlignmentILPCalculator {
 	}
 
 	protected LPMatrix<?> setupLpForFullSequence(int maxLength, boolean integerVariables, Marking initialMarking,
-			Marking finalMarking, int traceToIgnore, int startTracesAt) throws LPMatrixException {
+			Marking finalMarking, int traceToIgnore, int startTracesAt) {
 
 		//		LpSolve lp = LpSolve.makeLp((maxLength + 1) * places + 2 * maxLength + log.length, transitions * maxLength + 2);
 		LPMatrix<?> lp = setupMatrix((maxLength + 1) * places + 2 * maxLength + log.length, transitions * maxLength
@@ -681,10 +914,6 @@ public class AntiAlignmentILPCalculator {
 		return trans2label[transition] == event;
 	}
 
-	private double getCost(Transition trans, int i) {
-		return 1;
-	}
-
 	private String toString(short[] a) {
 		if (a == null)
 			return "null";
@@ -799,6 +1028,7 @@ public class AntiAlignmentILPCalculator {
 			}
 		}
 
+		double maxOccInY = 0;
 		// we consider only part of the log that is between maxLengthX and maxLengthY + maxLengthX for Y
 		for (int t = 0; t < log.length; t++) {
 			// Set up the constraints to estimate Hamming Distance, second for Y vectors
@@ -806,11 +1036,14 @@ public class AntiAlignmentILPCalculator {
 				if (e < log[t].length) {
 					// There is an event at position e in trace t
 					// Now find similarly labeled transitions
-					for (int tr = 0; tr < trans2label.length; tr++) {
-						if (trans2label[tr] == log[t][e]) {
+					for (short tr = 0; tr < trans2label.length; tr++) {
+						if (equalLabel(tr, log[t][e])) {
 							// add one to transition tr, labeled with log[t][e]
-							lp.setMat(row + 2 * t + 1, tr + transitions,
-									lp.getMat(row + 2 * t + 1, tr + transitions) + 1);
+							double val = lp.getMat(row + 2 * t + 1, tr + transitions) + 1;
+							lp.setMat(row + 2 * t + 1, tr + transitions, val);
+							if (t != traceToIgnore && val > maxOccInY) {
+								maxOccInY = val;
+							}
 						}
 					}
 				}
@@ -846,8 +1079,13 @@ public class AntiAlignmentILPCalculator {
 		lp.setColName(2 * transitions, "HX");
 		lp.setObjective(2 * transitions, -maxLengthX * maxLengthY);
 		// minimize g (GX is an underestimate of the minimal hamming distance from Y to any trace)
+		for (int t = transitions; t < 2 * transitions; t++) {
+			if (trans2label[t - transitions] >= 0) {
+				lp.setObjective(t, maxOccInY * maxOccInY);
+			}
+		}
 		lp.setColName(2 * transitions + 1, "HY");
-		lp.setObjective(2 * transitions + 1, -maxLengthX * maxLengthY);
+		lp.setObjective(2 * transitions + 1, -1);
 
 		lp.setMaxim();
 
@@ -947,4 +1185,332 @@ public class AntiAlignmentILPCalculator {
 		return lp;
 	}
 
+	protected LPMatrix<?> setupLpForHybrid(int maxLengthX, int maxLengthY, boolean integerVariables,
+			Marking initialMarking, Marking finalMarking, int traceToIgnore, int startTracesAt) {
+
+		int useHY = 1; // set to 1 if not using HY
+
+		//-                            B    >= m0
+		//-                            AB   >= m0
+		//-                            AAB  >= m0
+		//-                            AAAA == mf             Xi - Xi+1<=0   Xi <= 1   Y.1 <= maxLength-lengthX 
+		LPMatrix<?> lp = setupMatrix(places * (maxLengthX + 1) + (maxLengthX - 1) + maxLengthX + 1/*                     */
+				//- y.1 - maxLength X_(lengthX-1).1 <=0 traceXHD     traceYHD
+				+ 1 /*                             */+ useHY * log.length, transitions * maxLengthX + transitions + 3);
+
+		for (PetrinetEdge<? extends PetrinetNode, ? extends PetrinetNode> e : net.getEdges()) {
+			short p, t;
+			int dir;
+			int type = LpSolve.GE;
+			Transition trans;
+			if (e instanceof Arc) {
+				if (e.getSource() instanceof Place) {
+					p = place2int.get(e.getSource());
+					trans = (Transition) e.getTarget();
+					t = trans2int.get(trans);
+					dir = -((Arc) e).getWeight();
+				} else {
+					trans = (Transition) e.getSource();
+					t = trans2int.get(trans);
+					p = place2int.get(e.getTarget());
+					dir = ((Arc) e).getWeight();
+				}
+			} else if (e instanceof InhibitorArc) {
+				p = place2int.get(e.getSource());
+				trans = (Transition) e.getTarget();
+				t = trans2int.get(trans);
+				dir = 0;
+				type = LpSolve.EQ;
+			} else {
+				continue;
+			}
+
+			for (int block = 0; block <= maxLengthX; block++) {
+				// First the whole A matrices.
+				int r = block * places + p;
+				lp.setConstrType(r, type);
+				lp.setRowName(r, "A" + block + "_" + p);
+				for (int c = t; c < block * transitions; c += transitions) {
+					// update the A matrix
+					lp.setMat(r, c, lp.getMat(r, c) + dir);
+				}
+
+				// Then, the  A- matrix.
+				int c = block * transitions + t;
+				if ((dir < 0 || trans.isInvisible()) && block < maxLengthX) {
+					lp.setColName(c, trans.getLabel().replace("\\n$invisible$", "") + "-" + block);
+					lp.setInt(c, integerVariables);
+					lp.setUpbo(c, 1.0);
+					// update the A matrix only for consumption and for invisible transitions
+					// or in the last block
+					lp.setMat(r, c, lp.getMat(r, c) + dir);
+				}
+
+				// Then, in the last block
+				if (block == maxLengthX) {
+					lp.setConstrType(r, LpSolve.EQ);
+					lp.setMat(r, c, lp.getMat(r, c) + dir);
+					lp.setColName(c, trans.getLabel().replace("\\n$invisible$", "") + "-" + block);
+					lp.setInt(c, integerVariables);
+				}
+			}
+		}
+		int row = places * (maxLengthX + 1);
+		// set up the comparisons and sums
+		for (int i = 0; i < maxLengthX - 1; i++) {
+			for (int t = i * transitions; t < (i + 1) * transitions; t++) {
+				lp.setMat(row + i, t, trans2label[t % transitions] < 0 ? 0 : 1);
+			}
+			for (int t = (i + 1) * transitions; t < (i + 2) * transitions; t++) {
+				lp.setMat(row + i, t, trans2label[t % transitions] < 0 ? 0 : -1);
+			}
+			lp.setRowName(row + i, "X" + i + "~X" + (i + 1));
+			lp.setConstrType(row + i, LpSolve.GE);
+		}
+
+		// sos constraints, sum max 1
+		row += maxLengthX - 1;
+		for (int i = 0; i < maxLengthX; i++) {
+			for (int t = i * transitions; t < (i + 1) * transitions; t++) {
+				lp.setMat(row + i, t, trans2label[t % transitions] < 0 ? 0 : 1);
+			}
+			lp.setRowName(row + i, "X" + i + ".1");
+			lp.setConstrType(row + i, LpSolve.LE);
+		}
+
+		row += maxLengthX;
+		// setup Y length
+		for (int t = 0; t < transitions; t++) {
+			lp.setMat(row, maxLengthX * transitions + t, trans2label[t] < 0 ? 0 : 1);
+		}
+		lp.setRowName(row, "Y.1");
+		lp.setConstrType(row, LpSolve.LE);
+
+		row++;
+		// setup Y only if X_{lengthX}.1==1;
+		for (int t = 0; t < transitions; t++) {
+			lp.setMat(row, (maxLengthX - 1) * transitions + t, trans2label[t] < 0 ? 0 : -maxLengthY);
+			lp.setMat(row, maxLengthX * transitions + t, trans2label[t] < 0 ? 0 : 1);
+		}
+		lp.setRowName(row, "Y~X_l");
+		lp.setConstrType(row, LpSolve.LE);
+
+		double maxOccInY = 0;
+		//Hamming distances for the X and Y vectors
+		row++;
+		for (short tr = 0; tr < trans2label.length; tr++) {
+			for (int t = 0; t < log.length; t++) {
+				// what's the hamming distance of the x's to trace t?
+				for (int e = startTracesAt; e < startTracesAt + maxLengthX; e++) {
+					if (e >= log[t].length && trans2label[tr] > 0) {
+						// e is passed the length of the trace
+						lp.setMat(row + useHY * t, (e - startTracesAt) * transitions + tr, 1);
+					} else if (e < log[t].length && !equalLabel(tr, log[t][e])) {
+						// e is in the trace window, but label does not match
+						lp.setMat(row + useHY * t, (e - startTracesAt) * transitions + tr, 0);
+					} else {
+						//e is in the trace window and label matches.
+						lp.setMat(row + useHY * t, (e - startTracesAt) * transitions + tr, -1);
+					}
+				}
+
+				if (useHY == 2) {
+					// what's a guess for the hamming distance of the y's to trace t?
+					for (int e = startTracesAt + maxLengthX; e < startTracesAt + maxLengthX + maxLengthY
+							&& e < log[t].length; e++) {
+						if (equalLabel(tr, log[t][e])) {
+							// e is in the trace window and label matches
+							double val = lp.getMat(row + useHY * t + 1, maxLengthX * transitions + tr) + 1;
+							lp.setMat(row + useHY * t + 1, maxLengthX * transitions + tr, val);
+							if (t != traceToIgnore && val > maxOccInY) {
+								maxOccInY = val;
+							}
+						}
+					}
+				}
+
+				if (tr == 0) {
+					// Setup the rows for this trace;
+					lp.setRowName(row + useHY * t, "Hx-t" + t);
+
+					if (t == traceToIgnore) {
+						// minus g for the removed trace.
+						lp.setMat(row + useHY * t, transitions * (maxLengthX + 1) + 2, -1);
+						lp.setConstrType(row + useHY * t, LpSolve.EQ);
+					} else {
+						// minus hx
+						lp.setMat(row + useHY * t, transitions * (maxLengthX + 1), -1);
+						// minus hy
+						lp.setConstrType(row + useHY * t, LpSolve.GE);
+					}
+					if (useHY == 2) {
+						lp.setRowName(row + useHY * t + 1, "Hy-t" + t);
+						if (t == traceToIgnore) {
+							// minus g for the removed trace.
+							lp.setConstrType(row + useHY * t + 1, LpSolve.GE);
+						} else {
+							// minus hy
+							lp.setMat(row + useHY * t + 1, transitions * (maxLengthX + 1) + 1, -1);
+							lp.setConstrType(row + useHY * t + 1, LpSolve.GE);
+						}
+					}
+
+				}
+
+			}
+		}
+
+		// Setup objective function
+
+		// Minimize all invisible transitions
+		for (int t = 0; t < transitions * maxLengthX; t++) {
+			// Minimize the number of INVISIBLE transition firings in the anti-alignment
+			lp.setObjective(t, trans2label[t % transitions] < 0 ? -1 : 0);
+		}
+		for (int t = transitions * maxLengthX; t < transitions * (maxLengthX + 1); t++) {
+			if (trans2label[t % transitions] >= 0) {
+				// Maximize the number of Y transitions.
+				lp.setObjective(t, maxOccInY * maxLengthY);
+			} else {
+				// Minimize the number of INVISIBLE transition firings in Y part of the anti-alignment
+				lp.setObjective(t, -1.0 / ((maxLengthX + maxLengthY) * (maxLengthX + maxLengthY)));
+			}
+		}
+		if (useHY == 1) {
+
+			double max = 0.0;
+			//		 Minimize overlap in Y vector
+			for (short tr = 0; tr < trans2label.length; tr++) {
+				for (int t = 0; t < log.length; t++) {
+					for (int e = startTracesAt + maxLengthX; e < startTracesAt + maxLengthX + maxLengthY
+							&& e < log[t].length; e++) {
+						if (equalLabel(tr, log[t][e])) {
+							// label at index e in trace t matched transition tr
+							// increase the objective by 1 for transition tr in vector Y
+							lp.setObjective(maxLengthX * transitions + tr,
+									lp.getObjective(maxLengthX * transitions + tr) + 1);
+						}
+					}
+				}
+				if (lp.getObjective(maxLengthX * transitions + tr) > max) {
+					max = lp.getObjective(maxLengthX * transitions + tr);
+				}
+			}
+			max += 1.0;
+			for (short tr = 0; tr < trans2label.length; tr++) {
+				lp.setObjective(maxLengthX * transitions + tr, max - lp.getObjective(maxLengthX * transitions + tr));
+			}
+		} else {
+			// minimize hy = similarity to y
+			lp.setInt(transitions * (maxLengthX + 1) + 1, integerVariables);
+			lp.setObjective(transitions * (maxLengthX + 1) + 1, -1);
+		}
+
+		// maximize hx = minimal distance to the log
+		lp.setInt(transitions * (maxLengthX + 1), integerVariables);
+		lp.setObjective(transitions * (maxLengthX + 1), (maxLengthX + maxLengthY) * (maxLengthX + maxLengthY));
+
+		// minimize gx = distance to the ignored trace
+		lp.setInt(transitions * (maxLengthX + 1) + 2, integerVariables);
+		lp.setObjective(transitions * (maxLengthX + 1) + 2, -(maxLengthX + maxLengthY));
+
+		lp.setMaxim();
+
+		double[] rhs = new double[lp.getNrows()];
+
+		// first -initial Marking
+		for (Place p : initialMarking.baseSet()) {
+			for (row = place2int.get(p); row < places * (maxLengthX + 1); row += places) {
+				rhs[row] = -initialMarking.occurrences(p);
+			}
+		}
+		// then add final marking
+		for (Place p : finalMarking.baseSet()) {
+			row = maxLengthX * places + place2int.get(p);
+			rhs[row] += finalMarking.occurrences(p);
+		}
+		// then X.i - X.i+1 >= 0
+
+		// then X.1 <= 1
+		for (row = (maxLengthX + 1) * places + maxLengthX - 1; row < (maxLengthX + 1) * places + 2 * maxLengthX - 1; row++) {
+			rhs[row] = 1;
+		}
+		// Y.1 <= maxLengthY
+		rhs[row] = maxLengthY;
+		row++;
+		// Y.1 - l*X_l <= 0
+		row++;
+
+		for (int t = 0; t < log.length; t++) {
+			if (startTracesAt > log[t].length) {
+				// trace is outside window, length = 0;
+				rhs[row + useHY * t] = 0;
+			} else if (log[t].length > startTracesAt + maxLengthX) {
+				// trace spans full window
+				rhs[row + useHY * t] = -maxLengthX;
+			} else {
+				rhs[row + useHY * t] = -(log[t].length - startTracesAt);
+			}
+		}
+
+		lp.setRhVec(rhs);
+
+		//		lp.printLp();
+
+		return lp;
+	}
+
+	protected HybridEquationResult determineSplitMarkingForHybrid(LPMatrix<?> matrix, int maxLengthX,
+			boolean includeTrailingTaus) throws LPMatrixException {
+
+		double[] vars = new double[matrix.getNcolumns()];
+		int result = matrix.solve(vars);
+
+		if (result == LPMatrix.OPTIMAL) {
+			// compute the expected length of Y
+			int lengthY = 0;
+			for (int t = maxLengthX * transitions + invisibleTransitions; t < matrix.getNcolumns() - 3; t++) {
+				if (vars[t] > 0.5) {
+					lengthY += (int) (vars[t] + 0.5);
+				}
+			}
+
+			TShortList antiAlignment = new TShortArrayList(maxLengthX);
+			Stack<Transition> firingSequence = new Stack<Transition>();
+
+			int lengthX = 0;
+			// get the intermediate marking:
+			Marking intermediate = new Marking();
+			// Iterate over the X vector
+			for (int p = 0; p < places; p++) {
+				double effect = -matrix.getRh(p);
+				for (int t = 0; t < maxLengthX * transitions + (includeTrailingTaus ? invisibleTransitions : 0); t++) {
+					effect += vars[t] * matrix.getMat(p + places, t % transitions);
+					if (p == 0 && vars[t] > 0.5) {
+						if (trans2label[t % transitions] < 0) {
+							double v = vars[t];
+							do {
+								firingSequence.add(short2trans[t % transitions]);
+								v = v - 1;
+							} while (v > 0.5);
+						} else {
+							lengthX++;
+							// single visible transition
+							assert ((int) (vars[t] + 0.5)) == 1;
+							firingSequence.add(short2trans[t % transitions]);
+							antiAlignment.add(label2short.get(short2trans[t % transitions].getLabel()));
+						}
+					}
+				}
+				assert (effect + 1E-10) >= 0;
+				if (effect > 0) {
+					intermediate.add(short2place[p], (int) (effect + 0.5));
+				}
+			}
+
+			return new HybridEquationResult(intermediate, lengthX, lengthY, antiAlignment, firingSequence);
+		} else {
+			return null;
+		}
+	}
 }

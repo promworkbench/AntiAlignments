@@ -309,6 +309,10 @@ public abstract class LPMatrix<S> {
 		return colNames[column + offset];
 	}
 
+	public double getObjective(int column) {
+		return obj[column + offset];
+	}
+
 	//	public void printLp() {
 	//		LpSolve lp = null;
 	//		try {
