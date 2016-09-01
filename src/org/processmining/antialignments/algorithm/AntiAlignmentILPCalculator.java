@@ -146,6 +146,9 @@ public class AntiAlignmentILPCalculator {
 			final Vector<Transition> firingSequence, final TShortList antiAlignment, final int traceToIgnore)
 			throws LPMatrixException {
 
+		PetrinetSemantics semantics = PetrinetSemanticsFactory.regularPetrinetSemantics(Petrinet.class);
+		semantics.initialize(net.getTransitions(), initialMarking);
+
 		LPMatrix<?> matrix;
 		HybridEquationResult intermediate = new HybridEquationResult(initialMarking, 0, 0, new TShortArrayList(1),
 				new Stack<Transition>());
@@ -232,7 +235,37 @@ public class AntiAlignmentILPCalculator {
 			} else {
 				// Setup for next iteration
 				intermediate = nextResult;
+				if (VERBOSE) {
+					semantics.setCurrentState(splits.get(splits.size() - 1).getMarking());
+					for (int t_i = 0; t_i < intermediate.getFiringSequence().size(); t_i++) {
+						Transition t = intermediate.getFiringSequence().get(t_i);
+						try {
+							semantics.executeExecutableTransition(t);
+						} catch (IllegalTransitionException e) {
+							// so this transition was not enabled.
+							assert (t.isInvisible());
+							// push forward to first visible transition
+							int j;
+							for (j = t_i + 1; j < intermediate.getFiringSequence().size(); j++) {
+								if (intermediate.getFiringSequence().get(j).isInvisible()) {
+									intermediate.getFiringSequence()
+											.set(j - 1, intermediate.getFiringSequence().get(j));
+								} else {
+									intermediate.getFiringSequence().set(j - 1, t);
+									break;
+								}
+							}
+							if (j == intermediate.getFiringSequence().size()) {
+								intermediate.getFiringSequence().set(j - 1, t);
+							}
+							t_i--;
+							continue;
+						}
+					}
+
+				}
 				splits.add(intermediate);
+
 				marking = intermediate.getMarking();
 				maxLengthY -= maxLengthX;
 				startTraceAt += maxLengthX;
@@ -240,7 +273,6 @@ public class AntiAlignmentILPCalculator {
 		} while (maxLengthY >= 0 && !intermediate.getMarking().equals(finalMarking));
 
 		if (!intermediate.getMarking().equals(finalMarking)) {
-			splits.add(intermediate);
 			matrix = setupLpForHybrid(maxLengthX + maxLengthY, 0, true, marking, finalMarking, traceToIgnore,
 					startTraceAt);
 			intermediate = determineSplitMarkingForHybrid(matrix, maxLengthX + maxLengthY, true);
@@ -473,14 +505,14 @@ public class AntiAlignmentILPCalculator {
 	}
 
 	public boolean doAntiAlignmentTest(Marking initialMarking, Marking finalMarking) throws LPMatrixException {
-		VERBOSE = true;
+		VERBOSE = false;
 		mode = MODE_LPSOLVE;
 		mode = MODE_GUROBI;
 
 		String sep = "\t";
 		double exp = 1;
-		cutOffLength = 4;
-		int maxCutOffLength = 10;//maxLength * maxFactor
+		cutOffLength = 1;
+		int maxCutOffLength = maxLength * maxFactor;
 
 		System.out.println("mode" + sep + "cutOffLength" + sep + "time(ms)" + sep + "Dlog");
 		while (cutOffLength < maxCutOffLength) {
