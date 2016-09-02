@@ -10,6 +10,7 @@ import gurobi.GRBException;
 import org.processmining.antialignments.algorithm.ilp.LPMatrix;
 import org.processmining.models.graphbased.directed.petrinet.Petrinet;
 import org.processmining.models.graphbased.directed.petrinet.PetrinetEdge;
+import org.processmining.models.graphbased.directed.petrinet.PetrinetGraph;
 import org.processmining.models.graphbased.directed.petrinet.PetrinetNode;
 import org.processmining.models.graphbased.directed.petrinet.elements.Arc;
 import org.processmining.models.graphbased.directed.petrinet.elements.InhibitorArc;
@@ -26,7 +27,7 @@ public abstract class AbstractILPCalculator {
 	protected static final int MODE_LPSOLVE = 1;
 	protected static final int MODE_GUROBI = 2;
 
-	protected final Petrinet net;
+	protected final PetrinetGraph net;
 	protected final PetrinetSemantics semantics;
 	protected final TObjectShortMap<String> label2short;
 	protected final TShortObjectMap<String> short2label;
@@ -48,7 +49,7 @@ public abstract class AbstractILPCalculator {
 	protected int cutOffLength = 5;
 	protected double backtrackThreshold = 2.0;
 
-	public AbstractILPCalculator(Petrinet net, Marking initialMarking, Marking finalMarking,
+	public AbstractILPCalculator(PetrinetGraph net, Marking initialMarking, Marking finalMarking,
 			TObjectShortMap<String> label2short, TShortObjectMap<String> short2label, short[][] log) {
 		this.net = net;
 		//		this.initialMarking = initialMarking;

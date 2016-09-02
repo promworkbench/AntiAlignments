@@ -317,6 +317,14 @@ public abstract class LPMatrix<S> {
 		return colNames;
 	}
 
+	public double product(double[] vars, int fromIncluding, int toExcluding, int row) {
+		double r = 0;
+		for (int i = fromIncluding; i < toExcluding; i++) {
+			r += vars[i] * matrix[row][i + offset];
+		}
+		return r;
+	}
+
 	//	public void printLp() {
 	//		LpSolve lp = null;
 	//		try {

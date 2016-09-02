@@ -109,7 +109,7 @@ public class HeuristicPNetReplayer {
 		TObjectIntMap<TShortList> tempLog = new TObjectIntHashMap<>(xLog.size());
 		TShortObjectMap<String> short2label = new TShortObjectHashMap<>(net.getTransitions().size(), 0.7f, (short) -1);
 		TObjectShortMap<String> label2short = new TObjectShortHashMap<>(net.getTransitions().size(), 0.7f, (short) -1);
-		;
+		
 		short c = 0;
 
 		XEventClassifier classifier = (XEventClassifier) conn
