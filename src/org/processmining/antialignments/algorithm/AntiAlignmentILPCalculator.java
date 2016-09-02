@@ -65,6 +65,7 @@ public class AntiAlignmentILPCalculator {
 	private short invisibleTransitions;
 
 	private int cutOffLength = 5;
+	private double backtrackThreshold = 2.0;
 
 	public AntiAlignmentILPCalculator(Petrinet net, Marking initialMarking, Marking finalMarking,
 			TObjectShortMap<String> label2short, TShortObjectMap<String> short2label, short[][] log, int maxLength,
@@ -133,25 +134,26 @@ public class AntiAlignmentILPCalculator {
 			HybridEquationResult nextResult = determineSplitMarkingForHybrid(matrix, maxLengthX, startTracesAt,
 					maxLengthY == 0, antiAlignment, firingSequence, hd);
 
-			if (nextResult == null) {
-				// The model could not be solved, i.e. there is no path from intermediateMarking to the finalMarking in
-				// no more than maxLengthX+maxLengthY steps.
-				// This is where the fun begins....
-				//				((LpSolve) matrix.toSolver()).printLp();
-				System.err.println("HMM");
-			}
 			if (VERBOSE) {
 				System.out.println("Marking reached: " + nextResult.getMarking() + " in " + nextResult.getLengthX()
 						+ " steps and estimating " + nextResult.getLengthY() + " remaining steps.");
 			}
-			if (nextResult.getLengthX() + nextResult.getLengthY() < intermediate.getLengthY()) {
+			if (nextResult == null
+					|| nextResult.getLengthX() + nextResult.getLengthY() < intermediate.getLengthY()
+							/ backtrackThreshold) {
 				// nextResult did not live up to its expectations. 
 				// go back one step.
-				if (VERBOSE) {
-					System.out.println("Backtracking since " + (nextResult.getLengthX() + nextResult.getLengthY())
-							+ " < " + intermediate.getLengthY());
+				if (nextResult == null) {
+					if (VERBOSE) {
+						System.out.println("Backtracking because of infeasibility.");
+					}
+				} else {
+					if (VERBOSE) {
+						System.out.println("Backtracking since " + (nextResult.getLengthX() + nextResult.getLengthY())
+								+ " < " + intermediate.getLengthY());
+					}
+					nextResult.undo(antiAlignment, firingSequence);
 				}
-				nextResult.undo(antiAlignment, firingSequence);
 
 				// remove the last transition from the stack.
 				Transition last;
@@ -191,9 +193,9 @@ public class AntiAlignmentILPCalculator {
 					// X transition.
 				} while (!firingSequence.isEmpty() && firingSequence.peek().isInvisible());
 
-				// We've removed the last transition in the row, so allow for one more 
-				// transition in Y
-				maxLengthY++;
+				// We've removed the last transition in the row, 
+				// to avoid loops in backtracking, require one more step in X
+				maxLengthX++;
 				// and include one additional event.
 				startTracesAt--;
 			} else {
@@ -202,37 +204,8 @@ public class AntiAlignmentILPCalculator {
 				}
 				// Setup for next iteration
 				intermediate = nextResult;
-				//				if (VERBOSE) {
-				//					semantics.setCurrentState(splits.get(splits.size() - 1).getMarking());
-				//					for (int t_i = 0; t_i < firingSequence.size(); t_i++) {
-				//						Transition t = firingSequence.get(t_i);
-				//						try {
-				//							semantics.executeExecutableTransition(t);
-				//						} catch (IllegalTransitionException e) {
-				//							// so this transition was not enabled.
-				//							assert (t.isInvisible());
-				//							// push forward to first visible transition
-				//							int j;
-				//							for (j = t_i + 1; j < firingSequence.size(); j++) {
-				//								if (firingSequence.get(j).isInvisible()) {
-				//									firingSequence
-				//											.set(j - 1, firingSequence.get(j));
-				//								} else {
-				//									firingSequence.set(j - 1, t);
-				//									break;
-				//								}
-				//							}
-				//							if (j == firingSequence.size()) {
-				//								firingSequence.set(j - 1, t);
-				//							}
-				//							t_i--;
-				//							continue;
-				//						}
-				//					}
-				//
-				//				}
 				splits.add(intermediate);
-
+				maxLengthX = cutOffLength;
 				marking = intermediate.getMarking();
 				maxLengthY -= maxLengthX;
 				startTracesAt += maxLengthX;
@@ -483,15 +456,18 @@ public class AntiAlignmentILPCalculator {
 	}
 
 	public boolean doAntiAlignmentTest(Marking initialMarking, Marking finalMarking) throws LPMatrixException {
-		VERBOSE = true;
+		VERBOSE = false;
 		mode = MODE_LPSOLVE;
 		mode = MODE_GUROBI;
 
 		String sep = "\t";
 		double exp = 1;
 
-		cutOffLength = 2;
-		int maxCutOffLength = 20;//maxLength * maxFactor;
+		cutOffLength = 1;
+
+		backtrackThreshold = 2.0;
+
+		int maxCutOffLength = 40;// maxLength * maxFactor;
 
 		System.out.println("mode" + sep + "cutOffLength" + sep + "time(ms)" + sep + "Dlog");
 		while (cutOffLength < maxCutOffLength) {
