@@ -104,7 +104,7 @@ public class HeuristicPNetReplayerAlgorithm implements IPNReplayAlgorithm {
 		AlignmentILPCalculator calculator = new AlignmentILPCalculator(net, initialMarking, finalMarking, label2short,
 				short2label, log);
 		try {
-			for (int tr = 0; tr < log.length; tr++) {
+			for (int tr = 1; tr < log.length; tr++) {
 				calculator.solveSequential(initialMarking, finalMarking, tr);
 			}
 		} catch (LPMatrixException e) {

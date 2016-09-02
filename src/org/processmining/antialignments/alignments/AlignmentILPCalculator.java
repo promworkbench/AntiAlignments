@@ -5,9 +5,8 @@ import gnu.trove.list.array.TShortArrayList;
 import gnu.trove.map.TObjectShortMap;
 import gnu.trove.map.TShortObjectMap;
 
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
+import java.util.Stack;
 
 import lpsolve.LpSolve;
 
@@ -35,6 +34,8 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 	private int synchronousTransitions;
 	private short[] syncTransitionMap;
 	private short[] syncLabelMap;
+	private short[] logMoveMap;
+	private short[] syncEventMap;
 
 	public AlignmentILPCalculator(PetrinetGraph net, Marking initialMarking, Marking finalMarking,
 			TObjectShortMap<String> label2short, TShortObjectMap<String> short2label, short[][] log) {
@@ -72,10 +73,12 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 		{
 			Arrays.fill(label2pos, (short) -1);
 
+			logMoveMap = new short[Math.min(log[traceToConsider].length - startTraceAt, maxLengthX)];
+
 			TShortList trs = new TShortArrayList();
 			TShortList evts = new TShortArrayList();
+			TShortList indices = new TShortArrayList();
 			short pos = 0;
-			short evt = 0;
 			for (short e = (short) startTraceAt; e < log[traceToConsider].length && e < startTraceAt + maxLengthX; e++) {
 				for (short t = invisibleTransitions; t < transitions; t++) {
 					if (equalLabel(t, log[traceToConsider][e])) {
@@ -85,13 +88,14 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 						}
 						trs.add(t);
 						evts.add(log[traceToConsider][e]);
-
+						indices.add((short) (e - startTraceAt));
 					}
 				}
-
+				logMoveMap[e - startTraceAt] = log[traceToConsider][e];
 			}
 			syncTransitionMap = trs.toArray();
 			syncLabelMap = evts.toArray();
+			syncEventMap = indices.toArray();
 
 			for (short l = 0; l < labels; l++) {
 				if (label2pos[l] < 0) {
@@ -102,8 +106,8 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 		}
 
 		synchronousTransitions = syncLabelMap.length;
-		spCols = transitions + synchronousTransitions + syncLabelMap.length;
-		spRows = places + syncLabelMap.length + 1;
+		spCols = transitions + synchronousTransitions + logMoveMap.length;
+		spRows = places + logMoveMap.length + 1;
 
 		//-  
 		//-                            AB   >= m0
@@ -164,13 +168,15 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 
 					// Synchronous transitions (SYNCMOVE)
 					for (int sm = 0; sm < synchronousTransitions; sm++) {
-						if (syncLabelMap[sm] == tLabel) {
+						if (syncTransitionMap[sm] == t) {
 							int pos = c - t + transitions + sm;
 							lp.setMat(r, pos, lp.getMat(r, pos) + dir);
 							if (block < maxLengthX) {
+								// determine consumption row for event class
+								int ecr = syncEventMap[sm];
 								// token flow
-								lp.setMat(r - p + places + sm, pos, -1);
-								lp.setMat(r - p + places + sm + 1, pos, 1);
+								lp.setMat(r - p + places + ecr, pos, -1);
+								lp.setMat(r - p + places + ecr + 1, pos, 1);
 							} else {
 								// count
 								lp.setMat(r + labelRow, pos, 1);
@@ -191,7 +197,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 					}
 					// Synchronous transitions (SYNCMOVE)
 					for (int sm = 0; sm < synchronousTransitions; sm++) {
-						if (syncLabelMap[sm] == tLabel) {
+						if (syncTransitionMap[sm] == t) {
 							int pos = c - t + transitions + sm;
 
 							lp.setColName(pos, "S_" + trans.getLabel() + sm + "-" + block);
@@ -200,7 +206,10 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 							lp.setInt(pos, integerVariables);
 							lp.setUpbo(pos, 1.0);
 							lp.setMat(r, pos, lp.getMat(r, pos) + dir);
-							lp.setMat(r - p + places + sm, pos, -1);
+
+							// determine consumption row for event class
+							int ecr = syncEventMap[sm];
+							lp.setMat(r - p + places + ecr, pos, -1);
 							// lp.setMat(r + label + 1, c + pos, 1);
 						}
 					} // update the A matrix only for consumption and for invisible transitions
@@ -244,13 +253,13 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 			}
 		}
 
-		for (short l = 0; l < syncLabelMap.length; l++) {
+		for (short l = 0; l < logMoveMap.length; l++) {
 			for (int block = 0; block <= maxLengthX; block++) {
 				// First the whole A matrices.
 				int r = block * spRows + places + l;
 				lp.setConstrType(r, LPMatrix.GE);
 				lp.setRowName(r, "B" + block + "_" + l);
-				if (l == syncLabelMap.length - 1) {
+				if (l == logMoveMap.length - 1) {
 					lp.setConstrType(r + 1, LPMatrix.GE);
 					lp.setRowName(r + 1, "B" + block + "_" + (l + 1));
 				}
@@ -271,8 +280,8 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 				// Then, the  A- matrix.
 				int c = block * spCols + transitions + synchronousTransitions + l;
 				if (block < maxLengthX) {
-					lp.setColName(c, "L_" + short2label.get(syncLabelMap[l]) + "-" + block);
-					lp.setObjective(c, getCostForLogMove(syncLabelMap[l]));
+					lp.setColName(c, "L_" + short2label.get(logMoveMap[l]) + l + "-" + block);
+					lp.setObjective(c, getCostForLogMove(logMoveMap[l]));
 					lp.setInt(c, integerVariables);
 					lp.setUpbo(c, 1.0);
 					lp.setMat(r, c, -1);
@@ -375,17 +384,17 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 
 	private double getCostForModelMove(Transition trans) {
 		// TODO Auto-generated method stub
-		return trans.isInvisible() ? 0 : 2;
+		return trans.isInvisible() ? 0 : 1;
 	}
 
 	private double getCostForLogMove(short s) {
 		// TODO Auto-generated method stub
-		return 5;
+		return 1;
 	}
 
 	private double getCostForSync(Transition trans, short s) {
 		// TODO Auto-generated method stub
-		return 1;
+		return 0;
 	}
 
 	protected void solveSequential(Marking initialMarking, Marking finalMarking, final int traceToConsider)
@@ -396,66 +405,97 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 
 		Marking marking = initialMarking;
 		int startTracesAt = 0;
-		cutOffLength = 15;
-
 		LPMatrix<?> matrix;
+		Stack<Pair<Transition, Short>> moves = new Stack<>();
+
+		cutOffLength = 3;
+
+		do {
+			if (VERBOSE) {
+				System.out.println("Trying to get from " + initialMarking + " to " + finalMarking + //
+						" starting with  " + cutOffLength + " exact steps.");
+			}
+
+			matrix = setupLpForHybrid(cutOffLength, true, marking, finalMarking, traceToConsider, startTracesAt);
+			((LpSolve) matrix.toSolver()).printLp();
+
+			// Compute the new marking
+			double[] vars = new double[matrix.getNcolumns()];
+			int result = matrix.solve(vars);
+
+			if (result == LPMatrix.OPTIMAL) {
+
+				// Get the intermediate Marking reached after the cutOffLength
+				marking = getIntermediateMarking(marking, matrix, vars);
+
+				// Compute the number of explained events
+				int l = updateListOfMoves(vars, log[traceToConsider], startTracesAt, moves);
+				startTracesAt += l;
+
+				if (VERBOSE) {
+					System.out.println("Reached " + marking + " now.");
+					System.out.println("Partial alignment :" + moves.toString());
+
+				}
+			} else {
+				// BACKTRACKING NEEDED
+				break;
+			}
+		} while (!marking.equals(finalMarking));
 
 		if (VERBOSE) {
-			System.out.println("Trying to get from " + initialMarking + " to " + finalMarking + //
-					" starting with  " + cutOffLength + " exact steps.");
+			System.out.println();
+			System.out.println("Alignment done:");
+			System.out.println(moves);
+			System.out.println();
+
 		}
+		// translate vars into log, sync and model moves
+		//		System.out.println(Arrays.toString(matrix.getColNames()));
+		//		System.out.println(Arrays.toString(vars));
 
-		matrix = setupLpForHybrid(cutOffLength, true, marking, finalMarking, traceToConsider, startTracesAt);
+	}
 
-		//		((LpSolve) matrix.toSolver()).printLp();
-		// Compute the new marking
-		Marking intermediate = new Marking(marking);
-		double[] vars = new double[matrix.getNcolumns()];
-		matrix.solve(vars);
+	protected Marking getIntermediateMarking(Marking marking, LPMatrix<?> matrix, double[] vars) {
+		Marking newMarking = new Marking(marking);
 		for (short p = 0; p < places; p++) {
 			// compute the effect of the x vectors on place p.
-			int v = (int) (matrix.product(vars, 0, cutOffLength * spCols, cutOffLength * spRows + p) + 0.5);
-			while (v < 0) {
-				marking.remove(short2place[p]);
-				v++;
+			double v = matrix.product(vars, 0, cutOffLength * spCols, cutOffLength * spRows + p);
+			while (v < -.5) {
+				newMarking.remove(short2place[p]);
+				v += 1.0;
 			}
 			if (v > 0) {
-				intermediate.add(short2place[p], v);
+				newMarking.add(short2place[p], (int) (v + .5));
 			}
 		}
+		return newMarking;
+	}
 
-		// Compute the number of explained events
+	private int updateListOfMoves(double[] vars, short[] trace, int startTraceAt, Stack<Pair<Transition, Short>> moves) {
 		int l = 0;
-		List<Pair<Transition, Short>> moves = new ArrayList<>();
 		for (int c = 0; c < cutOffLength * spCols; c++) {
 			if (vars[c] > 0.5 || c % spCols < invisibleTransitions) {
 				if (c % spCols < transitions) {
 					int v = (int) (vars[c] + 0.5);
 					while (v > 0) {
-						moves.add(new Pair<>(short2trans[c % spCols], Short.MIN_VALUE));
+						moves.push(new Pair<>(short2trans[c % spCols], Short.MIN_VALUE));
 						v--;
 					}
 				} else if (c % spCols < transitions + synchronousTransitions) {
 					assert (int) (vars[c] + 0.5) == 1;
 					int t = syncTransitionMap[(c % spCols) - transitions];
-					moves.add(new Pair<>(short2trans[t], syncLabelMap[(c % spCols) - transitions]));
-					assert log[traceToConsider][startTracesAt + l] == syncLabelMap[(c % spCols) - transitions];
+					moves.push(new Pair<>(short2trans[t], syncLabelMap[(c % spCols) - transitions]));
+					assert trace[startTraceAt + l] == syncLabelMap[(c % spCols) - transitions];
 					l++;
 				} else {
-					moves.add(new Pair<>((Transition) null, syncLabelMap[(c % spCols) - transitions
+					moves.push(new Pair<>((Transition) null, syncLabelMap[(c % spCols) - transitions
 							- synchronousTransitions]));
-					assert log[traceToConsider][startTracesAt + l] == syncLabelMap[(c % spCols) - transitions
-							- synchronousTransitions];
+					assert trace[startTraceAt + l] == syncLabelMap[(c % spCols) - transitions - synchronousTransitions];
 					l++;
 				}
 			}
 		}
-
-		System.out.println(moves);
-
-		// translate vars into log, sync and model moves
-		//		System.out.println(Arrays.toString(matrix.getColNames()));
-		//		System.out.println(Arrays.toString(vars));
-
+		return l;
 	}
 }
