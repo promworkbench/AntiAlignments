@@ -411,13 +411,13 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 		cutOffLength = 3;
 
 		do {
-			if (VERBOSE) {
-				System.out.println("Trying to get from " + initialMarking + " to " + finalMarking + //
-						" starting with  " + cutOffLength + " exact steps.");
-			}
+						if (VERBOSE) {
+							System.out.println("Trying to get from " + initialMarking + " to " + finalMarking + //
+									" starting with  " + cutOffLength + " exact steps.");
+						}
 
 			matrix = setupLpForHybrid(cutOffLength, true, marking, finalMarking, traceToConsider, startTracesAt);
-			((LpSolve) matrix.toSolver()).printLp();
+			//			((LpSolve) matrix.toSolver()).printLp();
 
 			// Compute the new marking
 			double[] vars = new double[matrix.getNcolumns()];
@@ -489,9 +489,9 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 					assert trace[startTraceAt + l] == syncLabelMap[(c % spCols) - transitions];
 					l++;
 				} else {
-					moves.push(new Pair<>((Transition) null, syncLabelMap[(c % spCols) - transitions
+					moves.push(new Pair<>((Transition) null, logMoveMap[(c % spCols) - transitions
 							- synchronousTransitions]));
-					assert trace[startTraceAt + l] == syncLabelMap[(c % spCols) - transitions - synchronousTransitions];
+					assert trace[startTraceAt + l] == logMoveMap[(c % spCols) - transitions - synchronousTransitions];
 					l++;
 				}
 			}
