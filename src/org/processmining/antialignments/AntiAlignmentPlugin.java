@@ -25,7 +25,7 @@ import nl.tue.astar.AStarException;
 import org.deckfour.xes.classification.XEventClass;
 import org.deckfour.xes.model.XLog;
 import org.processmining.antialignments.algorithm.AntiAlignmentILPCalculator;
-import org.processmining.antialignments.algorithm.LPMatrix.LPMatrixException;
+import org.processmining.antialignments.algorithm.ilp.LPMatrix.LPMatrixException;
 import org.processmining.antialignments.pathfinder.AntiAlignments;
 import org.processmining.contexts.uitopia.UIPluginContext;
 import org.processmining.contexts.uitopia.annotations.UITopiaVariant;
