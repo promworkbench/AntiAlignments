@@ -4,10 +4,6 @@ import gnu.trove.list.TShortList;
 import gnu.trove.list.array.TShortArrayList;
 import gnu.trove.map.TObjectShortMap;
 import gnu.trove.map.TShortObjectMap;
-import gnu.trove.map.hash.TObjectShortHashMap;
-import gurobi.GRB;
-import gurobi.GRBEnv;
-import gurobi.GRBException;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -33,65 +29,20 @@ import org.processmining.models.semantics.petrinet.Marking;
 import org.processmining.models.semantics.petrinet.PetrinetSemantics;
 import org.processmining.models.semantics.petrinet.impl.PetrinetSemanticsFactory;
 
-public class AntiAlignmentILPCalculator {
+public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 
-	public static boolean VERBOSE = true;
-
-	private static final int MODE_LPSOLVE = 1;
-	private static final int MODE_GUROBI = 2;
-	private int mode;
-
-	private int useHY = 1; // set to 1 if not using HY
-
-	private final Petrinet net;
-	//	private final Marking initialMarking;
-	private final PetrinetSemantics semantics;
-	//	private final Marking finalMarking;
-	private final TObjectShortMap<String> label2short;
-	private TShortObjectMap<String> short2label;
-	private short transitions;
-	private short places;
-	private Transition[] short2trans;
-	private Place[] short2place;
-
-	private short[] trans2label;
-	private final short[][] log;
 	private final int maxFactor;
 
-	private GRBEnv gbEnv;
-	private TObjectShortHashMap<Object> trans2int;
-	private TObjectShortHashMap<Object> place2int;
 	private final int maxLength;
-	private short invisibleTransitions;
-
-	private int cutOffLength = 5;
-	private double backtrackThreshold = 2.0;
 
 	public AntiAlignmentILPCalculator(Petrinet net, Marking initialMarking, Marking finalMarking,
 			TObjectShortMap<String> label2short, TShortObjectMap<String> short2label, short[][] log, int maxLength,
 			int maxFactor) {
-		this.net = net;
-		//		this.initialMarking = initialMarking;
-		//		this.finalMarking = finalMarking;
-		this.label2short = label2short;
-		this.short2label = short2label;
-		this.log = log;
+
+		super(net, initialMarking, finalMarking, label2short, short2label, log);
+
 		this.maxLength = maxLength;
 		this.maxFactor = maxFactor;
-
-		this.semantics = PetrinetSemanticsFactory.regularPetrinetSemantics(Petrinet.class);
-		this.semantics.initialize(net.getTransitions(), initialMarking);
-
-		setupDataStructures();
-
-		mode = MODE_LPSOLVE;
-		try {
-			gbEnv = new GRBEnv();
-			gbEnv.set(GRB.IntParam.OutputFlag, 0);
-			mode = MODE_GUROBI;
-		} catch (GRBException e) {
-			mode = MODE_LPSOLVE;
-		}
 
 	}
 
@@ -505,6 +456,7 @@ public class AntiAlignmentILPCalculator {
 	}
 
 	public AntiAlignments getAntiAlignments(Marking initialMarking, Marking finalMarking) throws LPMatrixException {
+
 		if (doAntiAlignmentTest(initialMarking, finalMarking)) {
 			return null;
 		}
@@ -513,7 +465,7 @@ public class AntiAlignmentILPCalculator {
 			System.out.println("Solving by drilling down");
 		}
 
-		cutOffLength = 32;
+		cutOffLength = 15;
 		Stack<Transition> firingSequence = new Stack<Transition>();
 		TShortList antiAlignment = new TShortArrayList(maxLength * maxFactor);
 		//		solveByDrillingDown(maxLength * maxFactor, initialMarking, finalMarking, firingSequence, antiAlignment, -1, 0);
@@ -521,7 +473,7 @@ public class AntiAlignmentILPCalculator {
 		// FiringSequence and anti-alignment are known, but the distances to the log need to be computed.
 		short[] aa = antiAlignment.toArray();
 		int hd = getMinimalHammingDistanceToLog(aa, log, -1);
-		cutOffLength = 5;
+		cutOffLength = 15;
 
 		//		LPMatrix lpMatrix = setupLpForFullSequence(maxLength * maxFactor, true, initialMarking, finalMarking, 0);
 
@@ -658,63 +610,6 @@ public class AntiAlignmentILPCalculator {
 		}
 		return result;
 
-	}
-
-	protected void setupDataStructures() {
-		// replay log on model (or obtain existing replay result)
-		transitions = 0;
-		places = 0;
-
-		short2trans = new Transition[net.getTransitions().size()];
-		trans2int = new TObjectShortHashMap<>(net.getTransitions().size() / 2 * 3, 0.7f, (short) 0);
-		for (Transition t : net.getTransitions()) {
-			if (t.isInvisible()) {
-				trans2int.put(t, transitions);
-				short2trans[transitions] = t;
-				transitions++;
-			}
-		}
-		invisibleTransitions = transitions;
-		for (Transition t : net.getTransitions()) {
-			if (!t.isInvisible()) {
-				trans2int.put(t, transitions);
-				short2trans[transitions] = t;
-				transitions++;
-			}
-		}
-		short2place = new Place[net.getPlaces().size()];
-		place2int = new TObjectShortHashMap<>(net.getPlaces().size() / 2 * 3, 0.7f, (short) 0);
-		for (Place p : net.getPlaces()) {
-			place2int.put(p, places);
-			short2place[places] = p;
-			places++;
-		}
-
-		trans2label = new short[transitions];
-
-		for (PetrinetEdge<? extends PetrinetNode, ? extends PetrinetNode> e : net.getEdges()) {
-			short t;
-			Transition trans;
-			if (e instanceof Arc) {
-				if (e.getSource() instanceof Place) {
-					trans = (Transition) e.getTarget();
-					t = trans2int.get(trans);
-				} else {
-					trans = (Transition) e.getSource();
-					t = trans2int.get(trans);
-				}
-			} else if (e instanceof InhibitorArc) {
-				trans = (Transition) e.getTarget();
-				t = trans2int.get(trans);
-			} else {
-				continue;
-			}
-			if (trans.isInvisible()) {
-				trans2label[t] = -1;
-			} else {
-				trans2label[t] = label2short.get(trans.getLabel());
-			}
-		}
 	}
 
 	protected LPMatrix<?> setupLpForFullSequence(int maxLength, boolean integerVariables, Marking initialMarking,
@@ -888,10 +783,6 @@ public class AntiAlignmentILPCalculator {
 		//		lp.printLp();
 
 		return lp;
-	}
-
-	private boolean equalLabel(short transition, short event) {
-		return trans2label[transition] == event;
 	}
 
 	private String toString(short[] a) {
@@ -1086,14 +977,6 @@ public class AntiAlignmentILPCalculator {
 		//		lp.printLp();
 
 		return lp;
-	}
-
-	private LPMatrix<?> setupMatrix(int rows, int columns) {
-		if (mode == MODE_GUROBI) {
-			return new LPMatrix.GUROBI(gbEnv, rows, columns);
-		} else {
-			return new LPMatrix.LPSOLVE(rows, columns);
-		}
 	}
 
 	protected LPMatrix<?> setupLpForFinalInvisibleSteps(boolean integerVariables, Marking initialMarking,

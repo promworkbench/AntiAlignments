@@ -58,7 +58,7 @@ public abstract class LPMatrix<S> {
 						lp.setRowName(r + 1, rowNames[r]);
 					}
 				}
-				for (int c = 1; c < getNcolumns(); c++) {
+				for (int c = 1; c <= getNcolumns(); c++) {
 					lp.setInt(c, integer[c]);
 					lp.setLowbo(c, lowBo[c]);
 					lp.setUpbo(c, upBo[c]);
@@ -311,6 +311,10 @@ public abstract class LPMatrix<S> {
 
 	public double getObjective(int column) {
 		return obj[column + offset];
+	}
+
+	public String[] getColNames() {
+		return colNames;
 	}
 
 	//	public void printLp() {
