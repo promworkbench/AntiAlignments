@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.Set;
 
 import nl.tue.astar.AStarException;
+import nl.tue.astar.util.LPMatrix.LPMatrixException;
 
 import org.deckfour.xes.classification.XEventClass;
 import org.deckfour.xes.classification.XEventClasses;
@@ -23,7 +24,6 @@ import org.deckfour.xes.info.XLogInfoFactory;
 import org.deckfour.xes.model.XEvent;
 import org.deckfour.xes.model.XLog;
 import org.deckfour.xes.model.XTrace;
-import org.processmining.antialignments.algorithm.ilp.LPMatrix.LPMatrixException;
 import org.processmining.framework.plugin.PluginContext;
 import org.processmining.framework.plugin.annotations.KeepInProMCache;
 import org.processmining.models.graphbased.directed.petrinet.Petrinet;

@@ -6,8 +6,8 @@ import gnu.trove.map.hash.TObjectShortHashMap;
 import gurobi.GRB;
 import gurobi.GRBEnv;
 import gurobi.GRBException;
+import nl.tue.astar.util.LPMatrix;
 
-import org.processmining.antialignments.algorithm.ilp.LPMatrix;
 import org.processmining.models.graphbased.directed.petrinet.Petrinet;
 import org.processmining.models.graphbased.directed.petrinet.PetrinetEdge;
 import org.processmining.models.graphbased.directed.petrinet.PetrinetGraph;

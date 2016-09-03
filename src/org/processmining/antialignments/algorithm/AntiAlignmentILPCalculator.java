@@ -12,10 +12,10 @@ import java.util.Stack;
 import java.util.Vector;
 
 import lpsolve.LpSolve;
+import nl.tue.astar.util.LPMatrix;
+import nl.tue.astar.util.LPMatrix.LPMatrixException;
 
 import org.processmining.antialignments.algorithm.ilp.HybridEquationResult;
-import org.processmining.antialignments.algorithm.ilp.LPMatrix;
-import org.processmining.antialignments.algorithm.ilp.LPMatrix.LPMatrixException;
 import org.processmining.antialignments.pathfinder.AntiAlignments;
 import org.processmining.models.graphbased.directed.petrinet.Petrinet;
 import org.processmining.models.graphbased.directed.petrinet.PetrinetEdge;
