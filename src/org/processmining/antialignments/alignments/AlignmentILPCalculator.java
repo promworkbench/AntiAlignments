@@ -246,19 +246,20 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 
 					lp.setInt(c, integerVariables);
 
-					lp.setColName(c + pos, "S_" + t);
-					// Add two epsilon for sync move in Y, since it is preferred to put a sync
-					// move, if possible in X. For log moves this holds too, but a syncmove in X
-					// is better than a logmove in X
-					lp.setObjective(c + pos, getCostForSync(trans, tLabel) + 2 * EPSILON);
-					lp.setMat(acRow, c + pos, getCostForSync(trans, tLabel));
+					if (!trans.isInvisible()) {
+						lp.setColName(c + pos, "S_" + t);
+						// Add two epsilon for sync move in Y, since it is preferred to put a sync
+						// move, if possible in X. For log moves this holds too, but a syncmove in X
+						// is better than a logmove in X
+						lp.setObjective(c + pos, getCostForSync(trans, tLabel) + 2 * EPSILON);
+						lp.setMat(acRow, c + pos, getCostForSync(trans, tLabel));
 
-					lp.setInt(c + pos, integerVariables);
-					lp.setMat(r, c + pos, lp.getMat(r, c + pos) + dir);
-					if (labelRow > 0) {
-						lp.setMat(r + labelRow, c + pos, 1);
+						lp.setInt(c + pos, integerVariables);
+						lp.setMat(r, c + pos, lp.getMat(r, c + pos) + dir);
+						if (labelRow > 0) {
+							lp.setMat(r + labelRow, c + pos, 1);
+						}
 					}
-
 				}
 
 			}
@@ -396,7 +397,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 		rhs[row] = minEvent;
 
 		// then X.1 <= 1
-		for (row = row + 1; row < rhs.length; row++) {
+		for (row = row + 1; row < rhs.length - 2; row++) {
 			rhs[row] = 1;
 		}
 
@@ -423,19 +424,32 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 		return 0;
 	}
 
-	protected void solveSequential(Marking initialMarking, Marking finalMarking, final int traceToConsider)
+	protected void solveSequential(Marking initialMarking, Marking finalMarking, int traceToConsider)
 			throws LPMatrixException {
 
 		PetrinetSemantics semantics = PetrinetSemanticsFactory.regularPetrinetSemantics(Petrinet.class);
 		semantics.initialize(net.getTransitions(), initialMarking);
 
-		Marking marking = initialMarking;
-		int startTracesAt = 0;
 		LPMatrix<?> matrix;
-		Stack<Pair<Transition, Short>> moves = new Stack<>();
 
+		VERBOSE = true;
 		cutOffLength = 20;
 		int minEvents = 5;
+
+		//		System.out.println("cutOffLength\tminEvents\ttrace\tsetuptime\tsolvetime\talignmentCosts\tisFS\tisTrace");
+		//		for (cutOffLength = 1; cutOffLength < 25; cutOffLength++) {
+		//			for (minEvents = 1; minEvents < 10; minEvents++) {
+		//				for (traceToConsider = 0; traceToConsider < log.length; traceToConsider++) {
+		int startTracesAt = 0;
+		long solve = 0;
+		long setup = 0;
+
+		Stack<Pair<Transition, Short>> moves = new Stack<>();
+		Marking marking = initialMarking;
+
+		long mid = 0;
+		long start = System.currentTimeMillis();
+
 		int maxLengthX = cutOffLength;
 
 		double alignmentCosts = 0;
@@ -452,7 +466,14 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 
 			matrix = setupLpForHybrid(maxLengthX, Math.min(minEvents, log[traceToConsider].length - startTracesAt),
 					true, marking, finalMarking, traceToConsider, startTracesAt);
-			//			((LpSolve) matrix.toSolver()).printLp();
+
+			//			try {
+			//				FileWriter writer = new FileWriter("D:/temp/antialignment/debug_" + traceToConsider + ".csv");
+			//				matrix.printLp(writer, ";");
+			//				writer.close();
+			//			} catch (IOException e) {
+			//			}
+
 			if (VERBOSE) {
 				System.out
 						.println("ILP size: " + matrix.getNrows() + " rows and " + matrix.getNcolumns() + " columns.");
@@ -460,6 +481,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 
 			// Compute the new marking
 			double[] vars = new double[matrix.getNcolumns()];
+			mid = System.currentTimeMillis();
 			int result = matrix.solve(vars);
 
 			if (result == LPMatrix.OPTIMAL) {
@@ -493,8 +515,8 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 					System.out.println("Alignment costs so far: " + alignmentCosts);
 					System.out.println("Reached intermediate marking with objective with costs " + costX + " + "
 							+ costY);
-					//					System.out.print("Partial alignment :");
-					//					printMoves(moves);
+					System.out.print("Partial alignment :");
+					printMoves(moves);
 
 				}
 			} else {
@@ -506,6 +528,9 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 				// ensure that we don't loop.
 				break;
 			}
+			long end = System.currentTimeMillis();
+			setup += mid - start;
+			solve += end - mid;
 		} while (!marking.equals(finalMarking));
 
 		if (VERBOSE) {
@@ -513,13 +538,24 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 			System.out.println("Alignment done:");
 			printMoves(moves);
 			System.out.println();
-			assert checkFiringSequence(moves, initialMarking, finalMarking);
-			assert checkTrace(moves, log[traceToConsider]);
+			//						assert checkFiringSequence(moves, initialMarking, finalMarking);
+			//						assert checkTrace(moves, log[traceToConsider]);
 			System.out.println("Is a firing sequence: " + checkFiringSequence(moves, initialMarking, finalMarking));
 			System.out.println("Is the trace: " + checkTrace(moves, log[traceToConsider]));
 			System.out.println("Alignment costs: " + alignmentCosts);
+			System.out.println("Setup time: " + setup);
+			System.out.println("Solve time: " + solve);
 
 		}
+
+		//
+		//					System.out.println(cutOffLength + "\t" + minEvents + "\t" + traceToConsider + "\t" + (mid - start)
+		//							+ "\t" + (end - mid) + "\t" + alignmentCosts + "\t"
+		//							+ checkFiringSequence(moves, initialMarking, finalMarking) + "\t"
+		//							+ checkTrace(moves, log[traceToConsider]));
+		//				}
+		//			}
+		//		}
 		// translate vars into log, sync and model moves
 		//		System.out.println(Arrays.toString(matrix.getColNames()));
 		//		System.out.println(Arrays.toString(vars));
@@ -641,7 +677,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 				semantics.executeExecutableTransition(t);
 			} catch (IllegalTransitionException e) {
 				// so this transition was not enabled.
-				assert (t.isInvisible());
+				//				assert (t.isInvisible());
 				ok &= t.isInvisible();
 				// push forward to first visible transition
 				int j;
@@ -668,14 +704,14 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 	private boolean checkTrace(Vector<Pair<Transition, Short>> moves, short[] trace) {
 		int i = 0;
 		boolean ok = true;
-		for (int t_i = 0; t_i < moves.size(); t_i++) {
+		for (int t_i = 0; ok && t_i < moves.size(); t_i++) {
 			Pair<Transition, Short> move = moves.get(t_i);
 			short e = move.getSecond();
 			if (e == Short.MIN_VALUE) {
 				continue;
 			}
-			assert trace[i] == e;
-			ok = trace[i] == e;
+			//			/assert trace[i] == e;
+			ok &= i < trace.length && trace[i] == e;
 			i++;
 		}
 
