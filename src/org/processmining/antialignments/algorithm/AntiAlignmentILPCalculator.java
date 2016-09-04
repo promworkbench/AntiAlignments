@@ -122,7 +122,7 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 				}
 
 				if (antiAlignment.isEmpty()) {
-					System.err.println("Infeasible model");
+					System.err.println("Infeasible model: " + matrix.getLastSolverResult());
 					FileWriter writer;
 					try {
 						writer = new FileWriter("D:/temp/antialignment/debugLP-AntiAlignment.csv");
@@ -606,7 +606,7 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 				}
 			}
 		}
-		return hd;
+		return hd == Integer.MAX_VALUE ? antiAlignment.length : hd;
 	}
 
 	protected int getHammingDistanceToTrace(short[] antiAlignment, short[] trace) {
@@ -851,7 +851,7 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 
 		StringBuilder b = new StringBuilder();
 		b.append('[');
-		for (int i = 0;; i++) {
+		for (int i = 0; i < firingSequence.size(); i++) {
 			if (!firingSequence.get(i).isInvisible()) {
 				XEventClass clazz = mapping.get(firingSequence.get(i));
 				if (clazz != null && !clazz.equals(mapping.getDummyEventClass())) {
@@ -862,6 +862,7 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 				}
 			}
 		}
+		return b.toString();
 	}
 
 	protected LPMatrix<?> setupLpForSplit(int maxLengthX, int maxLengthY, boolean integerVariables,
@@ -1156,64 +1157,6 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 			}
 		}
 
-		//		for (PetrinetEdge<? extends PetrinetNode, ? extends PetrinetNode> e : net.getEdges()) {
-		//			short p, t;
-		//			int dir;
-		//			int type = LpSolve.GE;
-		//			Transition trans;
-		//			if (e instanceof Arc) {
-		//				if (e.getSource() instanceof Place) {
-		//					p = place2int.get(e.getSource());
-		//					trans = (Transition) e.getTarget();
-		//					t = trans2short.get(trans);
-		//					dir = -((Arc) e).getWeight();
-		//				} else {
-		//					trans = (Transition) e.getSource();
-		//					t = trans2short.get(trans);
-		//					p = place2int.get(e.getTarget());
-		//					dir = ((Arc) e).getWeight();
-		//				}
-		//			} else if (e instanceof InhibitorArc) {
-		//				p = place2int.get(e.getSource());
-		//				trans = (Transition) e.getTarget();
-		//				t = trans2short.get(trans);
-		//				dir = 0;
-		//				type = LpSolve.EQ;
-		//			} else {
-		//				continue;
-		//			}
-		//
-		//			for (int block = 0; block <= maxLengthX; block++) {
-		//				// First the whole A matrices.
-		//				int r = block * places + p;
-		//				lp.setConstrType(r, type);
-		//				lp.setRowName(r, "A" + block + "_" + p);
-		//				for (int c = t; c < block * transitions; c += transitions) {
-		//					// update the A matrix
-		//					lp.setMat(r, c, lp.getMat(r, c) + dir);
-		//				}
-		//
-		//				// Then, the  A- matrix.
-		//				int c = block * transitions + t;
-		//				if ((dir < 0 || trans.isInvisible()) && block < maxLengthX) {
-		//					lp.setColName(c, trans.getLabel().replace("\\n$invisible$", "") + "-" + block);
-		//					lp.setInt(c, integerVariables);
-		//					lp.setUpbo(c, 1.0);
-		//					// update the A matrix only for consumption and for invisible transitions
-		//					// or in the last block
-		//					lp.setMat(r, c, lp.getMat(r, c) + dir);
-		//				}
-		//
-		//				// Then, in the last block
-		//				if (block == maxLengthX) {
-		//					lp.setConstrType(r, LpSolve.EQ);
-		//					lp.setMat(r, c, lp.getMat(r, c) + dir);
-		//					lp.setColName(c, trans.getLabel().replace("\\n$invisible$", "") + "-" + block);
-		//					lp.setInt(c, integerVariables);
-		//				}
-		//			}
-		//		}
-
 		int row = places * (maxLengthX + 1);
 		// set up the comparisons and sums
 		for (int i = 0; i < maxLengthX - 1; i++) {
@@ -1328,6 +1271,9 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 		//		 Minimize overlap in Y vector
 		for (short tr = 0; tr < trans2label.length; tr++) {
 			for (int t = 0; t < log.length; t++) {
+				if (t == traceToIgnore) {
+					continue;
+				}
 				for (int e = startTracesAt + maxLengthX; e < startTracesAt + maxLengthX + maxLengthY
 						&& e < log[t].length; e++) {
 					if (equalLabel(tr, log[t][e])) {
@@ -1352,7 +1298,12 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 			lp.setColName(transitions * (maxLengthX + 1) + 1, "Drem");
 		}
 		// maximize Dlog
-		lp.setObjective(transitions * (maxLengthX + 1), (maxLengthX + maxLengthY) * (maxLengthX + maxLengthY));
+		if (log.length == 0 || (log.length == 1 && traceToIgnore >= 0)) {
+			// a DLog is a 0-column. A positive weight would make the model unbounded.
+			lp.setObjective(transitions * (maxLengthX + 1), -1);
+		} else {
+			lp.setObjective(transitions * (maxLengthX + 1), (maxLengthX + maxLengthY) * (maxLengthX + maxLengthY));
+		}
 
 		// minimize Drem
 		lp.setObjective(transitions * (maxLengthX + 1) + 1, -(maxLengthX + maxLengthY));

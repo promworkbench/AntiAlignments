@@ -21,13 +21,11 @@ public class BreadthFirstTraceSearch {
 	private final Map<Marking, TShortSet> statesVisitedPerTrace;
 	private final PetrinetSemantics semantics;
 
-	public BreadthFirstTraceSearch(Petrinet net, Marking initialMarking,
-			Map<Marking, TShortSet> statesVisitedPerTrace) {
+	public BreadthFirstTraceSearch(Petrinet net, Marking initialMarking, Map<Marking, TShortSet> statesVisitedPerTrace) {
 		this.net = net;
 		this.statesVisitedPerTrace = statesVisitedPerTrace;
 
-		this.semantics = PetrinetSemanticsFactory
-				.regularPetrinetSemantics(Petrinet.class);
+		this.semantics = PetrinetSemanticsFactory.regularPetrinetSemantics(Petrinet.class);
 		this.semantics.initialize(net.getTransitions(), initialMarking);
 	}
 
@@ -41,8 +39,7 @@ public class BreadthFirstTraceSearch {
 		}
 	}
 
-	public int getShortestDistance(Marking currentMarking, int maxDistance,
-			short traceToIgnore) {
+	public int getShortestDistance(Marking currentMarking, int maxDistance, short traceToIgnore) {
 		Set<Marking> done = new HashSet<Marking>();
 		Queue<MarkingVisit> todo = new LinkedBlockingQueue<MarkingVisit>();
 
@@ -54,8 +51,7 @@ public class BreadthFirstTraceSearch {
 			}
 
 			TShortSet traces = statesVisitedPerTrace.get(m.marking);
-			if (traces != null
-					&& (traces.size() > 1 || !traces.contains(traceToIgnore))) {
+			if (traces != null && (traces.size() > 1 || !traces.contains(traceToIgnore))) {
 				return m.distance;
 			}
 
@@ -67,11 +63,11 @@ public class BreadthFirstTraceSearch {
 				} catch (IllegalTransitionException e) {
 					e.printStackTrace();
 				}
-				todo.add(new MarkingVisit(semantics.getCurrentState(),
-						m.distance + 1));
+				todo.add(new MarkingVisit(semantics.getCurrentState(), m.distance + 1));
 				semantics.setCurrentState(m.marking);
 			}
 		}
-		return Integer.MAX_VALUE;
+		// The log didn't go anywhere?
+		return maxDistance;
 	}
 }
