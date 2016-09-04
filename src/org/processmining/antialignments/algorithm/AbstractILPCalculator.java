@@ -1,7 +1,10 @@
 package org.processmining.antialignments.algorithm;
 
+import gnu.trove.iterator.TIntShortIterator;
+import gnu.trove.map.TIntShortMap;
 import gnu.trove.map.TObjectShortMap;
 import gnu.trove.map.TShortObjectMap;
+import gnu.trove.map.hash.TIntShortHashMap;
 import gnu.trove.map.hash.TObjectShortHashMap;
 import gurobi.GRB;
 import gurobi.GRBEnv;
@@ -48,6 +51,51 @@ public abstract class AbstractILPCalculator {
 	protected int useHY = 1;
 	protected int cutOffLength = 5;
 	protected double backtrackThreshold = 2.0;
+
+	// Represents the matrix of consumption of the original net.
+	protected final Matrix matrixAMin;
+
+	// Represents the incidence matrix of the original net.
+	protected final Matrix matrixA;
+
+	protected static class Matrix {
+		public final short[] rows;
+		public final short[] columns;
+		public final short[] values;
+
+		public Matrix(int size) {
+			rows = new short[size];
+			columns = new short[size];
+			values = new short[size];
+		}
+
+		public int size() {
+			return rows.length;
+		}
+
+		public void copyIntoMatrix(LPMatrix<?> lp, int lpRow, int lpCol) {
+			for (int i = 0; i < rows.length; i++) {
+				lp.setMat(lpRow + rows[i], lpCol + columns[i], values[i]);
+			}
+		}
+
+		public void copyIntoMatrixFromColumn(int minCol, LPMatrix<?> lp, int lpRow, int lpCol) {
+			for (int i = 0; i < rows.length; i++) {
+				if (columns[i] >= minCol) {
+					lp.setMat(lpRow + rows[i], lpCol + columns[i], values[i]);
+				}
+			}
+		}
+
+		public void copyColumnIntoMatrix(int colM, LPMatrix<?> lp, int fromRow, int lpCol) {
+			for (int i = 0; i < rows.length; i++) {
+				if (columns[i] == colM) {
+					lp.setMat(fromRow + rows[i], lpCol, values[i]);
+				}
+			}
+		}
+
+	}
 
 	public AbstractILPCalculator(PetrinetGraph net, Marking initialMarking, Marking finalMarking,
 			TObjectShortMap<String> label2short, TShortObjectMap<String> short2label, short[][] log) {
@@ -128,6 +176,59 @@ public abstract class AbstractILPCalculator {
 		}
 
 		this.labels = (short) label2short.size();
+
+		TIntShortMap aMinusList = new TIntShortHashMap(net.getEdges().size(), 0.7f, (Short.MIN_VALUE << 16)
+				| Short.MIN_VALUE, (short) 0);
+		TIntShortMap aMatrixList = new TIntShortHashMap(net.getEdges().size(), 0.7f, (Short.MIN_VALUE << 16)
+				| Short.MIN_VALUE, (short) 0);
+
+		for (PetrinetEdge<? extends PetrinetNode, ? extends PetrinetNode> e : net.getEdges()) {
+			int p, t;
+			short dir;
+			if (e instanceof Arc) {
+				if (e.getSource() instanceof Place) {
+					p = place2int.get(e.getSource());
+					t = trans2int.get(e.getTarget());
+					dir = (short) -((Arc) e).getWeight();
+				} else {
+					t = trans2int.get(e.getSource());
+					p = place2int.get(e.getTarget());
+					dir = (short) ((Arc) e).getWeight();
+				}
+				int m = (p << 16) | t;
+				if (dir < 0 || trans2label[t] < 0) {
+					aMinusList.adjustOrPutValue(m, dir, dir);
+				}
+				aMatrixList.adjustOrPutValue(m, dir, dir);
+			}
+		}
+
+		matrixAMin = new Matrix(aMinusList.size());
+		int i = 0;
+		TIntShortIterator it = aMinusList.iterator();
+		while (it.hasNext()) {
+			it.advance();
+			short row = (short) (it.key() >>> 16);
+			short col = (short) (it.key() & 0x00FF);
+			matrixAMin.rows[i] = row;
+			matrixAMin.columns[i] = col;
+			matrixAMin.values[i] = it.value();
+			i++;
+		}
+
+		matrixA = new Matrix(aMatrixList.size());
+		i = 0;
+		it = aMatrixList.iterator();
+		while (it.hasNext()) {
+			it.advance();
+			short row = (short) (it.key() >>> 16);
+			short col = (short) (it.key() & 0x00FF);
+			matrixA.rows[i] = row;
+			matrixA.columns[i] = col;
+			matrixA.values[i] = it.value();
+			i++;
+		}
+
 	}
 
 	protected boolean equalLabel(short transition, short event) {

@@ -5,6 +5,7 @@ import gnu.trove.list.array.TShortArrayList;
 import gnu.trove.map.TObjectShortMap;
 import gnu.trove.map.TShortObjectMap;
 
+import java.io.FileWriter;
 import java.util.Arrays;
 import java.util.Stack;
 import java.util.Vector;
@@ -16,11 +17,7 @@ import nl.tue.astar.util.LPMatrix.LPMatrixException;
 import org.processmining.antialignments.algorithm.AbstractILPCalculator;
 import org.processmining.framework.util.Pair;
 import org.processmining.models.graphbased.directed.petrinet.Petrinet;
-import org.processmining.models.graphbased.directed.petrinet.PetrinetEdge;
 import org.processmining.models.graphbased.directed.petrinet.PetrinetGraph;
-import org.processmining.models.graphbased.directed.petrinet.PetrinetNode;
-import org.processmining.models.graphbased.directed.petrinet.elements.Arc;
-import org.processmining.models.graphbased.directed.petrinet.elements.InhibitorArc;
 import org.processmining.models.graphbased.directed.petrinet.elements.Place;
 import org.processmining.models.graphbased.directed.petrinet.elements.Transition;
 import org.processmining.models.semantics.IllegalTransitionException;
@@ -30,18 +27,40 @@ import org.processmining.models.semantics.petrinet.impl.PetrinetSemanticsFactory
 
 public class AlignmentILPCalculator extends AbstractILPCalculator {
 
-	private static final double EPSILON = 0.1;
+	private static final double EPSILON = 0.001;
+
+	private static final boolean NAMES = true;
+
+	// number of columns in synchronous product matrix
 	private int spCols;
+	// number of rows in synchronous product matrix
 	private int spRows;
+	// number of synchronous transitions in synchronous product
 	private int synchronousTransitions;
+
+	// maps from [0..synchronousTransitions> to the actual transition
+	// that is synchronous at that position
 	private short[] syncTransitionMap;
+	// maps from [0..synchronousTransitions> to the label of the event
+	// that is synchronous at that position
 	private short[] syncLabelMap;
-	private short[] logMoveMap;
+	// maps from [0..synchronousTransitions> to the actual event
+	// that is synchronous at that position
 	private short[] syncEventMap;
+
+	// represents the window of the considered trace
+	private short[] traceWindow;
+
+	// presents a sorting on the labels from [0..labels>, such that the synchronous
+	// labels are first, then the rest
+	private final short[] label2pos;
 
 	public AlignmentILPCalculator(PetrinetGraph net, Marking initialMarking, Marking finalMarking,
 			TObjectShortMap<String> label2short, TShortObjectMap<String> short2label, short[][] log) {
 		super(net, initialMarking, finalMarking, label2short, short2label, log);
+
+		label2pos = new short[labels];
+
 		mode = MODE_LPSOLVE;
 		//		try {
 		//			gbEnv = new GRBEnv();
@@ -62,264 +81,464 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 
 	}
 
-	protected LPMatrix<?> setupLpForHybrid(int maxLengthX, int minEvent, boolean integerVariables,
-			Marking initialMarking, Marking finalMarking, int traceToConsider, int startTraceAt) {
+	private void prepareSyncProduct(short[] trace, int minEvent, int startTraceAt) {
+		Arrays.fill(label2pos, (short) -1);
+
+		traceWindow = new short[Math.min(trace.length - startTraceAt, minEvent)];
+
+		TShortList trs = new TShortArrayList();
+		TShortList evts = new TShortArrayList();
+		TShortList indices = new TShortArrayList();
+		short pos = 0;
+		for (short e = (short) startTraceAt; e < trace.length && e < startTraceAt + minEvent; e++) {
+			for (short t = invisibleTransitions; t < transitions; t++) {
+				if (equalLabel(t, trace[e])) {
+					if (label2pos[trace[e]] < 0) {
+						label2pos[trace[e]] = pos;
+						pos++;
+					}
+					trs.add(t);
+					evts.add(trace[e]);
+					indices.add((short) (e - startTraceAt));
+				}
+			}
+			traceWindow[e - startTraceAt] = trace[e];
+		}
+		syncTransitionMap = trs.toArray();
+		syncLabelMap = evts.toArray();
+		syncEventMap = indices.toArray();
+
+		for (short l = 0; l < labels; l++) {
+			if (label2pos[l] < 0) {
+				label2pos[l] = pos;
+				pos++;
+			}
+		}
+
+		synchronousTransitions = syncLabelMap.length;
+		spCols = transitions + synchronousTransitions + traceWindow.length;
+		spRows = places + traceWindow.length + 1;
+
+	}
+
+	protected LPMatrix<?> setupLpForHybrid(/* LPMatrix<?> previous, */int maxLengthX, int minEvent,
+			boolean integerVariables, Marking initialMarking, Marking finalMarking, int traceToConsider,
+			int startTraceAt) {
 
 		// Find the transitions in the net labeled with an event in 
 		// log[traceToConsider][startTraceAt] .. log[traceToConsider][startTraceAt+lengthX-1]
 
 		// A synchronous transition is needed for each (t,e) combination where e is an event
 
-		short[] label2pos = new short[labels];
-		{
-			Arrays.fill(label2pos, (short) -1);
+		prepareSyncProduct(log[traceToConsider], minEvent, startTraceAt);
 
-			logMoveMap = new short[Math.min(log[traceToConsider].length - startTraceAt, minEvent)];
-
-			TShortList trs = new TShortArrayList();
-			TShortList evts = new TShortArrayList();
-			TShortList indices = new TShortArrayList();
-			short pos = 0;
-			for (short e = (short) startTraceAt; e < log[traceToConsider].length && e < startTraceAt + minEvent; e++) {
-				for (short t = invisibleTransitions; t < transitions; t++) {
-					if (equalLabel(t, log[traceToConsider][e])) {
-						if (label2pos[log[traceToConsider][e]] < 0) {
-							label2pos[log[traceToConsider][e]] = pos;
-							pos++;
-						}
-						trs.add(t);
-						evts.add(log[traceToConsider][e]);
-						indices.add((short) (e - startTraceAt));
-					}
-				}
-				logMoveMap[e - startTraceAt] = log[traceToConsider][e];
-			}
-			syncTransitionMap = trs.toArray();
-			syncLabelMap = evts.toArray();
-			syncEventMap = indices.toArray();
-
-			for (short l = 0; l < labels; l++) {
-				if (label2pos[l] < 0) {
-					label2pos[l] = pos;
-					pos++;
-				}
-			}
-		}
-
-		synchronousTransitions = syncLabelMap.length;
-		spCols = transitions + synchronousTransitions + logMoveMap.length;
-		spRows = places + logMoveMap.length + 1;
-
+		LPMatrix<?> lp;
 		//-  
-		//-                            AB   >= m0
-		//-                            AAB  >= m0
-		//-                            AAAA == mf        
-		LPMatrix<?> lp = setupMatrix(spRows * maxLengthX + (places + labels) + //
+		//-                  AB   >= m0
+		//-                  AAB  >= m0
+		//-                  AAAA == mf        
+		int rows = spRows * maxLengthX + (places + labels) + //
 				// Xi - Xi+1<=0        Xi <= 1  
-				(maxLengthX - 1) + maxLengthX + 1 + 1 + 1,//
-				//  X part is small           Y part is full
-				spCols * maxLengthX + 2 * transitions - invisibleTransitions + labels);
+				(maxLengthX - 1) + maxLengthX + 1 + 1 + 1;
+		//  X part is small           Y part is full
+		int cols = spCols * maxLengthX + 2 * transitions - invisibleTransitions + labels;
 
+		//		if (previous == null || rows != previous.getNrows() || cols != previous.getNcolumns()) {
+		lp = setupMatrix(rows, cols);
+		//		} else {
+		//			return updateSyncMovesAndRhs(previous);
+		//		}
 		// row for the alignment costs
+
 		int acRow = lp.getNrows() - 1;
+		int progressRow = lp.getNrows() - 2;
 		lp.setConstrType(acRow, LPMatrix.GE);
 
-		for (PetrinetEdge<? extends PetrinetNode, ? extends PetrinetNode> e : net.getEdges()) {
-			short p, t;
-			int dir;
-			int type = LpSolve.GE;
-			Transition trans;
-			if (e instanceof Arc) {
-				if (e.getSource() instanceof Place) {
-					p = place2int.get(e.getSource());
-					trans = (Transition) e.getTarget();
-					t = trans2int.get(trans);
-					dir = -((Arc) e).getWeight();
-				} else {
-					trans = (Transition) e.getSource();
-					t = trans2int.get(trans);
-					p = place2int.get(e.getTarget());
-					dir = ((Arc) e).getWeight();
+		int labelCountRowOffset = maxLengthX * spRows + places;
+
+		// Fist set up all the sub-matrices for the exact part
+		for (int block = 0; block < maxLengthX; block++) {
+			int firstRow = block * spRows;
+			int firstEventRow = block * spRows + places;
+			// Setup the constraint types
+			for (int p = 0; p < places; p++) {
+				if (NAMES) {
+					lp.setRowName(firstRow + p, "r" + block + "P" + p);
 				}
-			} else if (e instanceof InhibitorArc) {
-				p = place2int.get(e.getSource());
-				trans = (Transition) e.getTarget();
-				t = trans2int.get(trans);
-				dir = 0;
-				type = LpSolve.EQ;
-			} else {
-				continue;
+				lp.setConstrType(firstRow + p, LPMatrix.GE);
+			}
+			for (int e = 0; e < traceWindow.length; e++) {
+				if (NAMES) {
+					lp.setRowName(firstEventRow + e, "r" + block + "T" + traceWindow[e]);
+				}
+				lp.setConstrType(firstEventRow + e, LPMatrix.GE);
+			}
+			if (NAMES) {
+				lp.setRowName(firstEventRow + traceWindow.length, "r" + block + "Tf");
+			}
+			lp.setConstrType(firstEventRow + traceWindow.length, LPMatrix.GE);
+			for (int min = 0; min < block; min++) {
+				// First the whole incidence matrix
+				matrixA.copyIntoMatrix(lp, firstRow, min * spCols);
+				// then the SyncMove part
+				for (int sm = 0; sm < synchronousTransitions; sm++) {
+					int col = min * spCols + transitions + sm;
+					matrixA.copyColumnIntoMatrix(syncTransitionMap[sm], lp, block * spRows, col);
+					// token flow on event
+					lp.setMat(firstEventRow + syncEventMap[sm], col, -1);
+					lp.setMat(firstEventRow + syncEventMap[sm] + 1, col, 1);
+				}
+				// then the LogMove part
+				for (int e = 0; e < traceWindow.length; e++) {
+					int col = min * spCols + transitions + synchronousTransitions + e;
+					// token flow on event
+					lp.setMat(firstEventRow + e, col, -1);
+					lp.setMat(firstEventRow + e + 1, col, 1);
+
+				}
+			}
+			// Second, Aminus
+			matrixAMin.copyIntoMatrix(lp, block * spRows, block * spCols);
+			matrixA.copyIntoMatrix(lp, maxLengthX * spRows, block * spCols);
+			for (short t = 0; t < transitions; t++) {
+				int col = block * spCols + t;
+				// Set Objective
+				lp.setObjective(col, getCostForModelMove(t) + (minEvent == 0 ? 0 : EPSILON));
+				if (trans2label[t] >= 0) {
+					lp.setMat(progressRow, col, 1);
+					lp.setBinary(col, integerVariables);
+					lp.setUpbo(col, 1);
+				}
+				lp.setMat(acRow, col, getCostForModelMove(t));
+				// Add labels
+				if (NAMES) {
+					lp.setColName(col, "c" + block + "M" + t);
+				}
 			}
 
-			short tLabel = trans2label[t];
+			// then the SyncMove part
+			for (int sm = 0; sm < synchronousTransitions; sm++) {
+				int col = block * spCols + transitions + sm;
+				matrixAMin.copyColumnIntoMatrix(syncTransitionMap[sm], lp, block * spRows, col);
+				matrixA.copyColumnIntoMatrix(syncTransitionMap[sm], lp, maxLengthX * spRows, col);
 
-			int labelRow;// label is the relative position of the corresponding label row.
-			if (tLabel >= 0) {
-				labelRow = places - p + label2pos[tLabel];
-			} else {
-				labelRow = 0;
+				// token flow on event
+				lp.setMat(firstEventRow + syncEventMap[sm], col, -1);
+
+				// label count for syncmove in X
+				lp.setMat(labelCountRowOffset + label2pos[syncLabelMap[sm]], col, 1);
+
+				// Set Objective
+				lp.setObjective(col, getCostForSync(syncTransitionMap[sm], syncLabelMap[sm]));
+				lp.setMat(acRow, col, getCostForSync(syncTransitionMap[sm], syncLabelMap[sm]));
+				if (trans2label[syncTransitionMap[sm]] >= 0) {
+					lp.setMat(progressRow, col, 1);
+					lp.setBinary(col, integerVariables);
+					lp.setUpbo(col, 1);
+				}
+
+				// Add labels
+				if (NAMES) {
+					lp.setColName(col, "c" + block + "S" + syncTransitionMap[sm]);
+				}
 			}
+			// then the LogMove part
+			for (int e = 0; e < traceWindow.length; e++) {
+				int col = block * spCols + transitions + synchronousTransitions + e;
+				// token flow on event
+				lp.setMat(firstEventRow + e, col, -1);
 
-			for (int block = 0; block <= maxLengthX; block++) {
-				// First the whole A matrices.
-				int r = block * spRows + p;
+				// label count for logmove in X
+				lp.setMat(labelCountRowOffset + label2pos[traceWindow[e]], col, 1);
 
-				lp.setConstrType(r, type);
-				lp.setRowName(r, "A" + block + "_" + p);
-				for (int c = t; c < block * spCols; c += spCols) {
-					// update the SP A matrix
-					lp.setMat(r, c, lp.getMat(r, c) + dir);
-					// update the SP A' matrix for mapped visible transitions
+				// Set Objective
+				lp.setObjective(col, getCostForLogMove(traceWindow[e]));
+				lp.setMat(acRow, col, getCostForLogMove(traceWindow[e]));
+				lp.setMat(progressRow, col, 1);
+				lp.setBinary(col, integerVariables);
+				lp.setUpbo(col, 1);
 
-					// Synchronous transitions (SYNCMOVE)
-					for (int sm = 0; sm < synchronousTransitions; sm++) {
-						if (syncTransitionMap[sm] == t) {
-							int pos = c - t + transitions + sm;
-							lp.setMat(r, pos, lp.getMat(r, pos) + dir);
-							if (block < maxLengthX) {
-								// determine consumption row for event class
-								int ecr = syncEventMap[sm];
-								// token flow
-								lp.setMat(r - p + places + ecr, pos, -1);
-								lp.setMat(r - p + places + ecr + 1, pos, 1);
-							} else {
-								// count
-								lp.setMat(r + labelRow, pos, 1);
-							}
-						}
-					}
+				// Add labels
+				if (NAMES) {
+					lp.setColName(col, "c" + block + "L" + traceWindow[e]);
 				}
-
-				// Then, the  A- matrix.
-				int c = block * spCols + t;
-				if ((dir < 0 || trans.isInvisible()) && block < maxLengthX) {
-					lp.setColName(c, "M_" + t + "_" + block);
-					lp.setObjective(c, getCostForModelMove(trans) + (minEvent == 0 ? 0 : EPSILON));
-					lp.setMat(acRow, c, getCostForModelMove(trans));
-					lp.setBinary(c, integerVariables);
-					if (!trans.isInvisible()) {
-						// set upper bound of 1 for visible transitions
-						lp.setUpbo(c, 1.0);
-					}
-					// Synchronous transitions (SYNCMOVE)
-					for (int sm = 0; sm < synchronousTransitions; sm++) {
-						if (syncTransitionMap[sm] == t) {
-							int pos = c - t + transitions + sm;
-
-							lp.setColName(pos, "S_" + t + sm + "_" + block);
-							lp.setObjective(pos, getCostForSync(trans, syncLabelMap[sm]));
-							lp.setMat(acRow, pos, getCostForSync(trans, syncLabelMap[sm]));
-							lp.setBinary(pos, integerVariables);
-							lp.setUpbo(pos, 1.0);
-							lp.setMat(r, pos, lp.getMat(r, pos) + dir);
-
-							// determine consumption row for event class
-							int ecr = syncEventMap[sm];
-							lp.setMat(r - p + places + ecr, pos, -1);
-							// lp.setMat(r + label + 1, c + pos, 1);
-						}
-					} // update the A matrix only for consumption and for invisible transitions
-						// or in the last block
-
-					// update the SP A matrix for consumption in case of visible,
-					// or always in case of invisible transition
-					lp.setMat(r, c, lp.getMat(r, c) + dir);
-				}
-
-				// Then, in the last block
-				if (block == maxLengthX) {
-
-					// In this Block, the positions of the labels are now different,
-					// as are the positions of the synchronous transitions.
-
-					// The relative position of the synchronous counterpart is at:
-					int pos = transitions - invisibleTransitions;
-
-					if (finalMarking != null) {
-						lp.setConstrType(r, LpSolve.EQ);
-					}
-					// update the SP A matrix
-					lp.setMat(r, c, lp.getMat(r, c) + dir);
-					lp.setColName(c, "M_" + t);
-					lp.setObjective(c, getCostForModelMove(trans) + (minEvent > 0 ? 0 : EPSILON));
-					lp.setMat(acRow, c, getCostForModelMove(trans));
-
-					lp.setInt(c, integerVariables);
-
-					if (!trans.isInvisible()) {
-						lp.setColName(c + pos, "S_" + t);
-						// Add two epsilon for sync move in Y, since it is preferred to put a sync
-						// move, if possible in X. For log moves this holds too, but a syncmove in X
-						// is better than a logmove in X
-						lp.setObjective(c + pos, getCostForSync(trans, tLabel) + 2 * EPSILON);
-						lp.setMat(acRow, c + pos, getCostForSync(trans, tLabel));
-
-						lp.setInt(c + pos, integerVariables);
-						lp.setMat(r, c + pos, lp.getMat(r, c + pos) + dir);
-						if (labelRow > 0) {
-							lp.setMat(r + labelRow, c + pos, 1);
-						}
-					}
-				}
-
 			}
 		}
 
-		for (short l = 0; l < logMoveMap.length; l++) {
-			for (int block = 0; block <= maxLengthX; block++) {
-				// First the whole A matrices.
-				int r = block * spRows + places + l;
-				lp.setConstrType(r, LPMatrix.GE);
-				lp.setRowName(r, "B" + block + "_" + l);
-				if (l == logMoveMap.length - 1) {
-					lp.setConstrType(r + 1, LPMatrix.GE);
-					lp.setRowName(r + 1, "B" + block + "_" + (l + 1));
-				}
-				for (int c = transitions + synchronousTransitions + l; c < block * spCols; c += spCols) {
-					// update the SP B matrix
-					if (block < maxLengthX) {
-						// token flow
-						lp.setMat(r, c, -1);
-						lp.setMat(r + 1, c, 1);
-					} else {
-						// count
-						lp.setMat(r, c, 1);
-					}
-					lp.setUpbo(c, 1);
-					lp.setBinary(c, integerVariables);
-				}
+		// That concludes the X part, i.e. the sync product part of the incidence matrix
+		// Now the Y part
+		// First the Model Moves
+		matrixA.copyIntoMatrix(lp, maxLengthX * spRows, maxLengthX * spCols);
+		for (int p = 0; p < places; p++) {
+			if (NAMES) {
+				lp.setRowName(maxLengthX * spRows + p, "rP" + p);
+			}
+			// set Constraint type
+			lp.setConstrType(maxLengthX * spRows + p, LPMatrix.EQ);
+		}
+		for (short t = 0; t < transitions; t++) {
+			int col = maxLengthX * spCols + t;
+			// Set Objective
+			lp.setObjective(col, getCostForModelMove(t) + (minEvent == 0 ? EPSILON : 0));
+			lp.setMat(acRow, col, getCostForModelMove(t));
 
-				// Then, the  A- matrix.
-				int c = block * spCols + transitions + synchronousTransitions + l;
-				if (block < maxLengthX) {
-					lp.setColName(c, "L_" + logMoveMap[l] + "_" + block);
-					lp.setObjective(c, getCostForLogMove(logMoveMap[l]));
-					lp.setMat(acRow, c, getCostForLogMove(logMoveMap[l]));
-
-					lp.setBinary(c, integerVariables);
-					lp.setUpbo(c, 1.0);
-					lp.setMat(r, c, -1);
-				}
-
+			// count progress
+			if (trans2label[t] >= 0) {
+				lp.setMat(progressRow, col, 1);
+				lp.setInt(col, integerVariables);
+			}
+			// Add labels
+			if (NAMES) {
+				lp.setColName(col, "cM" + t);
 			}
 		}
-		for (short l = 0; l < label2pos.length; l++) {
-			int r = maxLengthX * spRows + places + label2pos[l];
-			lp.setRowName(r, "C_" + l);
 
-			int c = maxLengthX * spCols + 2 * transitions - invisibleTransitions + label2pos[l];
+		// Second the synchronous moves
+		matrixA.copyIntoMatrixFromColumn(invisibleTransitions, lp, maxLengthX * spRows, maxLengthX * spCols
+				+ transitions);
+		for (short t = invisibleTransitions; t < transitions; t++) {
+			int col = maxLengthX * spCols + transitions + t;
+			// Set Objective
+			lp.setObjective(col, getCostForSync(t, trans2label[t]) + 2 * EPSILON);
+			lp.setMat(acRow, col, getCostForSync(t, trans2label[t]));
 
-			// Then, in the last block
-			lp.setConstrType(r, LpSolve.EQ);
-			// count the number of B's
-			lp.setMat(r, c, 1);
-			lp.setColName(c, "L_" + l);
-			lp.setObjective(c, getCostForLogMove(l) + EPSILON);
-			lp.setMat(acRow, c, getCostForLogMove(l));
+			// count progress
+			if (trans2label[t] >= 0) {
+				lp.setMat(progressRow, col, 1);
+				lp.setInt(col, integerVariables);
+			}
 
-			lp.setInt(c, integerVariables);
+			// Add labels
+			if (NAMES) {
+				lp.setColName(col, "cS" + t);
+			}
 
+			// label count for logmove in X
+			lp.setMat(labelCountRowOffset + label2pos[trans2label[t]], col, 1);
 		}
+
+		// Third the log moves
+		for (short l = 0; l < labels; l++) {
+			int col = maxLengthX * spCols + 2 * transitions - invisibleTransitions + label2pos[l];
+			int row = labelCountRowOffset + label2pos[l];
+
+			// label count for logmove in X
+			lp.setMat(row, col, 1);
+
+			// Set Objective
+			lp.setObjective(col, getCostForLogMove(l) + EPSILON);
+			lp.setMat(acRow, col, getCostForLogMove(l));
+
+			// count progress
+			lp.setMat(progressRow, col, 1);
+			lp.setInt(col, integerVariables);
+
+			// set Constraint type
+			lp.setConstrType(row, LPMatrix.EQ);
+
+			// Add labels
+			if (NAMES) {
+				lp.setRowName(row, "rL" + l);
+				lp.setColName(col, "cL" + l);
+			}
+		}
+
+		//		for (PetrinetEdge<? extends PetrinetNode, ? extends PetrinetNode> e : net.getEdges()) {
+		//			short p, t;
+		//			int dir;
+		//			int type = LpSolve.GE;
+		//			Transition trans;
+		//			if (e instanceof Arc) {
+		//				if (e.getSource() instanceof Place) {
+		//					p = place2int.get(e.getSource());
+		//					trans = (Transition) e.getTarget();
+		//					t = trans2int.get(trans);
+		//					dir = -((Arc) e).getWeight();
+		//				} else {
+		//					trans = (Transition) e.getSource();
+		//					t = trans2int.get(trans);
+		//					p = place2int.get(e.getTarget());
+		//					dir = ((Arc) e).getWeight();
+		//				}
+		//			} else if (e instanceof InhibitorArc) {
+		//				p = place2int.get(e.getSource());
+		//				trans = (Transition) e.getTarget();
+		//				t = trans2int.get(trans);
+		//				dir = 0;
+		//				type = LpSolve.EQ;
+		//			} else {
+		//				continue;
+		//			}
+		//
+		//			short tLabel = trans2label[t];
+		//
+		//			int labelRow;// label is the relative position of the corresponding label row.
+		//			if (tLabel >= 0) {
+		//				labelRow = places - p + label2pos[tLabel];
+		//			} else {
+		//				labelRow = 0;
+		//			}
+		//
+		//			for (int block = 0; block <= maxLengthX; block++) {
+		//				// First the whole A matrices.
+		//				int r = block * spRows + p;
+		//
+		//				lp.setConstrType(r, type);
+		//				lp.setRowName(r, "A" + block + "_" + p);
+		//				for (int c = t; c < block * spCols; c += spCols) {
+		//					// update the SP A matrix
+		//					lp.setMat(r, c, lp.getMat(r, c) + dir);
+		//					// update the SP A' matrix for mapped visible transitions
+		//
+		//					// Synchronous transitions (SYNCMOVE)
+		//					for (int sm = 0; sm < synchronousTransitions; sm++) {
+		//						if (syncTransitionMap[sm] == t) {
+		//							int pos = c - t + transitions + sm;
+		//							lp.setMat(r, pos, lp.getMat(r, pos) + dir);
+		//							if (block < maxLengthX) {
+		//								// determine consumption row for event class
+		//								int ecr = syncEventMap[sm];
+		//								// token flow
+		//								lp.setMat(r - p + places + ecr, pos, -1);
+		//								lp.setMat(r - p + places + ecr + 1, pos, 1);
+		//							} else {
+		//								// count
+		//								lp.setMat(r + labelRow, pos, 1);
+		//							}
+		//						}
+		//					}
+		//				}
+		//
+		//				// Then, the  A- matrix.
+		//				int c = block * spCols + t;
+		//				if ((dir < 0 || trans.isInvisible()) && block < maxLengthX) {
+		//					lp.setColName(c, "M_" + t + "_" + block);
+		//					lp.setObjective(c, getCostForModelMove(trans) + (minEvent == 0 ? 0 : EPSILON));
+		//					lp.setMat(acRow, c, getCostForModelMove(trans));
+		//					lp.setBinary(c, integerVariables);
+		//					if (!trans.isInvisible()) {
+		//						// set upper bound of 1 for visible transitions
+		//						lp.setUpbo(c, 1.0);
+		//					}
+		//					// Synchronous transitions (SYNCMOVE)
+		//					for (int sm = 0; sm < synchronousTransitions; sm++) {
+		//						if (syncTransitionMap[sm] == t) {
+		//							int pos = c - t + transitions + sm;
+		//
+		//							lp.setColName(pos, "S_" + t + sm + "_" + block);
+		//							lp.setObjective(pos, getCostForSync(trans, syncLabelMap[sm]));
+		//							lp.setMat(acRow, pos, getCostForSync(trans, syncLabelMap[sm]));
+		//							lp.setBinary(pos, integerVariables);
+		//							lp.setUpbo(pos, 1.0);
+		//							lp.setMat(r, pos, lp.getMat(r, pos) + dir);
+		//
+		//							// determine consumption row for event class
+		//							int ecr = syncEventMap[sm];
+		//							lp.setMat(r - p + places + ecr, pos, -1);
+		//							// lp.setMat(r + label + 1, c + pos, 1);
+		//						}
+		//					} // update the A matrix only for consumption and for invisible transitions
+		//						// or in the last block
+		//
+		//					// update the SP A matrix for consumption in case of visible,
+		//					// or always in case of invisible transition
+		//					lp.setMat(r, c, lp.getMat(r, c) + dir);
+		//				}
+		//
+		//				// Then, in the last block
+		//				if (block == maxLengthX) {
+		//
+		//					// In this Block, the positions of the labels are now different,
+		//					// as are the positions of the synchronous transitions.
+		//
+		//					// The relative position of the synchronous counterpart is at:
+		//					int pos = transitions - invisibleTransitions;
+		//
+		//					if (finalMarking != null) {
+		//						lp.setConstrType(r, LpSolve.EQ);
+		//					}
+		//					// update the SP A matrix
+		//					lp.setMat(r, c, lp.getMat(r, c) + dir);
+		//					lp.setColName(c, "M_" + t);
+		//					lp.setObjective(c, getCostForModelMove(trans) + (minEvent > 0 ? 0 : EPSILON));
+		//					lp.setMat(acRow, c, getCostForModelMove(trans));
+		//
+		//					lp.setInt(c, integerVariables);
+		//
+		//					if (!trans.isInvisible()) {
+		//						lp.setColName(c + pos, "S_" + t);
+		//						// Add two epsilon for sync move in Y, since it is preferred to put a sync
+		//						// move, if possible in X. For log moves this holds too, but a syncmove in X
+		//						// is better than a logmove in X
+		//						lp.setObjective(c + pos, getCostForSync(trans, tLabel) + 2 * EPSILON);
+		//						lp.setMat(acRow, c + pos, getCostForSync(trans, tLabel));
+		//
+		//						lp.setInt(c + pos, integerVariables);
+		//						lp.setMat(r, c + pos, lp.getMat(r, c + pos) + dir);
+		//						if (labelRow > 0) {
+		//							lp.setMat(r + labelRow, c + pos, 1);
+		//						}
+		//					}
+		//				}
+		//
+		//			}
+		//		}
+		//
+		//		for (short l = 0; l < traceWindow.length; l++) {
+		//			for (int block = 0; block <= maxLengthX; block++) {
+		//				// First the whole A matrices.
+		//				int r = block * spRows + places + l;
+		//				lp.setConstrType(r, LPMatrix.GE);
+		//				lp.setRowName(r, "B" + block + "_" + l);
+		//				if (l == traceWindow.length - 1) {
+		//					lp.setConstrType(r + 1, LPMatrix.GE);
+		//					lp.setRowName(r + 1, "B" + block + "_" + (l + 1));
+		//				}
+		//				for (int c = transitions + synchronousTransitions + l; c < block * spCols; c += spCols) {
+		//					// update the SP B matrix
+		//					if (block < maxLengthX) {
+		//						// token flow
+		//						lp.setMat(r, c, -1);
+		//						lp.setMat(r + 1, c, 1);
+		//					} else {
+		//						// count
+		//						lp.setMat(r, c, 1);
+		//					}
+		//					lp.setUpbo(c, 1);
+		//					lp.setBinary(c, integerVariables);
+		//				}
+		//
+		//				// Then, the  A- matrix.
+		//				int c = block * spCols + transitions + synchronousTransitions + l;
+		//				if (block < maxLengthX) {
+		//					lp.setColName(c, "L_" + traceWindow[l] + "_" + block);
+		//					lp.setObjective(c, getCostForLogMove(traceWindow[l]));
+		//					lp.setMat(acRow, c, getCostForLogMove(traceWindow[l]));
+		//
+		//					lp.setBinary(c, integerVariables);
+		//					lp.setUpbo(c, 1.0);
+		//					lp.setMat(r, c, -1);
+		//				}
+		//
+		//			}
+		//		}
+		//		for (short l = 0; l < label2pos.length; l++) {
+		//			int r = maxLengthX * spRows + places + label2pos[l];
+		//			lp.setRowName(r, "C_" + l);
+		//
+		//			int c = maxLengthX * spCols + 2 * transitions - invisibleTransitions + label2pos[l];
+		//
+		//			// Then, in the last block
+		//			lp.setConstrType(r, LpSolve.EQ);
+		//			// count the number of B's
+		//			lp.setMat(r, c, 1);
+		//			lp.setColName(c, "L_" + l);
+		//			lp.setObjective(c, getCostForLogMove(l) + EPSILON);
+		//			lp.setMat(acRow, c, getCostForLogMove(l));
+		//
+		//			lp.setInt(c, integerVariables);
+		//
+		//		}
 
 		int row = spRows * maxLengthX + places + labels;
 		// set up the comparisons and sums
@@ -354,12 +573,13 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 			lp.setRowName(row + i, "X" + i + ".1");
 			lp.setConstrType(row + i, LpSolve.LE);
 		}
-		row += maxLengthX;
-		for (int t = 0; t < lp.getNcolumns(); t++) {
-			lp.setMat(row, t, 1);
-		}
-		lp.setRowName(row, "SUM");
-		lp.setConstrType(row, LPMatrix.GE);
+
+		//		row += maxLengthX;
+		//		for (int t = 0; t < lp.getNcolumns(); t++) {
+		//			lp.setMat(row, t, 1);
+		//		}
+		lp.setRowName(progressRow, "SUM");
+		lp.setConstrType(progressRow, LPMatrix.GE);
 
 		lp.setMinim();
 		//		lp.setMaxim();
@@ -409,9 +629,18 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 		return lp;
 	}
 
+	private LPMatrix<?> updateSyncMovesAndRhs(LPMatrix<?> previous) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
 	private double getCostForModelMove(Transition trans) {
 		// TODO Auto-generated method stub
 		return trans.isInvisible() ? 0 : 1;
+	}
+
+	private double getCostForModelMove(short t) {
+		return getCostForModelMove(short2trans[t]);
 	}
 
 	private double getCostForLogMove(short s) {
@@ -424,6 +653,10 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 		return 0;
 	}
 
+	private double getCostForSync(short t, short s) {
+		return getCostForSync(short2trans[t], s);
+	}
+
 	protected void solveSequential(Marking initialMarking, Marking finalMarking, int traceToConsider)
 			throws LPMatrixException {
 
@@ -433,22 +666,32 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 		LPMatrix<?> matrix;
 
 		VERBOSE = true;
-		cutOffLength = 20;
-		int minEvents = 5;
+		cutOffLength = 5;
+		int minEvents = 2;
 
-		//		System.out.println("cutOffLength\tminEvents\ttrace\tsetuptime\tsolvetime\talignmentCosts\tisFS\tisTrace");
-		//		for (cutOffLength = 1; cutOffLength < 25; cutOffLength++) {
-		//			for (minEvents = 1; minEvents < 10; minEvents++) {
-		//				for (traceToConsider = 0; traceToConsider < log.length; traceToConsider++) {
+		//		if (traceToConsider > 0) {
+		//			return;
+		//		}
+		//		for (mode = 1; mode < 3; mode++) {
+		//			FileWriter writer;
+		//			try {
+		//				writer = new FileWriter("D:/temp/antialignment/testResults"
+		//						+ (mode == MODE_GUROBI ? "Gurobi" : "LpSolve") + ".csv");
+		//				writer.write("cutOffLength;minEvents;trace;setuptime;solvetime;alignmentCosts;isFS;isTrace\r\n");
+		//				writer.flush();
+		//			} catch (IOException e1) {
+		//				return;
+		//			}
+		//
+		//			for (cutOffLength = 1; cutOffLength < 25; cutOffLength++) {
+		//				for (minEvents = 1; minEvents < 10 && minEvents <= cutOffLength; minEvents++) {
+		//					for (traceToConsider = 0; traceToConsider < log.length; traceToConsider++) {
 		int startTracesAt = 0;
 		long solve = 0;
 		long setup = 0;
 
 		Stack<Pair<Transition, Short>> moves = new Stack<>();
 		Marking marking = initialMarking;
-
-		long mid = 0;
-		long start = System.currentTimeMillis();
 
 		int maxLengthX = cutOffLength;
 
@@ -464,15 +707,20 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 						+ log[traceToConsider].length + ".");
 			}
 
+			long start = System.currentTimeMillis();
 			matrix = setupLpForHybrid(maxLengthX, Math.min(minEvents, log[traceToConsider].length - startTracesAt),
 					true, marking, finalMarking, traceToConsider, startTracesAt);
 
-			//			try {
-			//				FileWriter writer = new FileWriter("D:/temp/antialignment/debug_" + traceToConsider + ".csv");
-			//				matrix.printLp(writer, ";");
-			//				writer.close();
-			//			} catch (IOException e) {
-			//			}
+			FileWriter writer;
+			try {
+				writer = new FileWriter("D:/temp/antialignment/debugLP.csv");
+				matrix.printLp(writer, ";");
+				writer.close();
+				((LpSolve) matrix.toSolver()).writeLp("D:/temp/antialignment/debugLP.lp");
+
+			} catch (Exception e1) {
+				return;
+			}
 
 			if (VERBOSE) {
 				System.out
@@ -481,7 +729,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 
 			// Compute the new marking
 			double[] vars = new double[matrix.getNcolumns()];
-			mid = System.currentTimeMillis();
+			long mid = System.currentTimeMillis();
 			int result = matrix.solve(vars);
 
 			if (result == LPMatrix.OPTIMAL) {
@@ -547,13 +795,23 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 			System.out.println("Solve time: " + solve);
 
 		}
-
+		//						try {
+		//							writer.write(cutOffLength + ";" + minEvents + ";" + traceToConsider + ";" + setup + ";"
+		//									+ solve + ";" + alignmentCosts + ";"
+		//									+ checkFiringSequence(moves, initialMarking, finalMarking) + ";"
+		//									+ checkTrace(moves, log[traceToConsider]) + "\r\n");
+		//							writer.flush();
 		//
-		//					System.out.println(cutOffLength + "\t" + minEvents + "\t" + traceToConsider + "\t" + (mid - start)
-		//							+ "\t" + (end - mid) + "\t" + alignmentCosts + "\t"
-		//							+ checkFiringSequence(moves, initialMarking, finalMarking) + "\t"
-		//							+ checkTrace(moves, log[traceToConsider]));
+		//						} catch (IOException e) {
+		//						}
+		//
+		//					}
 		//				}
+		//			}
+		//			try {
+		//				writer.close();
+		//			} catch (IOException e) {
+		//
 		//			}
 		//		}
 		// translate vars into log, sync and model moves
@@ -650,9 +908,9 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 					assert trace[startTraceAt + l] == syncLabelMap[(c % spCols) - transitions];
 					l++;
 				} else {
-					moves.push(new Pair<>((Transition) null, logMoveMap[(c % spCols) - transitions
+					moves.push(new Pair<>((Transition) null, traceWindow[(c % spCols) - transitions
 							- synchronousTransitions]));
-					assert trace[startTraceAt + l] == logMoveMap[(c % spCols) - transitions - synchronousTransitions];
+					assert trace[startTraceAt + l] == traceWindow[(c % spCols) - transitions - synchronousTransitions];
 					l++;
 				}
 			}
