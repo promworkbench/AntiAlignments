@@ -67,6 +67,8 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 
 	private int alignmentCosts;
 
+	protected int steps;
+
 	public AlignmentILPCalculator(PetrinetGraph net, Marking initialMarking, Marking finalMarking,
 			TObjectShortMap<String> label2short, TShortObjectMap<XEventClass> short2label, short[][] log) {
 		super(net, initialMarking, finalMarking, label2short, short2label, log);
@@ -731,6 +733,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 		solve = 0;
 		setup = 0;
 		alignmentCosts = 0;
+		steps = 0;
 
 		TIntList moves = new TIntArrayList();
 		Marking marking = initialMarking;
@@ -769,6 +772,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 			double[] vars = new double[matrix.getNcolumns()];
 			long mid = System.currentTimeMillis();
 			int result = matrix.solve(vars);
+			steps++;
 
 			if (result == LPMatrix.OPTIMAL) {
 
@@ -952,7 +956,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 		return l;
 	}
 
-	private boolean checkFiringSequence(TIntList moves, Marking initialMarking, Marking finalMarking) {
+	public boolean checkFiringSequence(TIntList moves, Marking initialMarking, Marking finalMarking) {
 
 		PetrinetSemantics semantics = PetrinetSemanticsFactory.regularPetrinetSemantics(Petrinet.class);
 		semantics.initialize(net.getTransitions(), initialMarking);
@@ -992,7 +996,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 		return ok && semantics.getCurrentState().equals(finalMarking);
 	}
 
-	private boolean checkTrace(TIntList moves, short[] trace) {
+	public boolean checkTrace(TIntList moves, short[] trace) {
 		int i = 0;
 		boolean ok = true;
 		for (int t_i = 0; ok && t_i < moves.size() && i < trace.length; t_i++) {

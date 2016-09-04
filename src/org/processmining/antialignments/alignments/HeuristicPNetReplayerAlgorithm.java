@@ -209,12 +209,13 @@ public class HeuristicPNetReplayerAlgorithm implements IPNReplayAlgorithm {
 			try {
 				long start = System.currentTimeMillis();
 				TIntList moves = calculator.getAlignment(initialMarking, finalMarking, tr);
+				boolean reliable = calculator.checkFiringSequence(moves, initialMarking, finalMarking);
 				long end = System.currentTimeMillis();
 
 				Representative rep = log2xLog[tr];
 				//				XTrace trace = xLog.get(rep.getRepresented().get(0));
 				SyncReplayResult srr = getSyncReplayResult(calculator, moves, rep.getRepresented().get(0), minCost,
-						(int) (end - start));
+						(int) (end - start), reliable);
 				for (int xt = 1; xt < rep.getRepresented().size(); xt++) {
 					srr.addNewCase(rep.getRepresented().get(xt));
 
@@ -233,7 +234,7 @@ public class HeuristicPNetReplayerAlgorithm implements IPNReplayAlgorithm {
 	}
 
 	protected SyncReplayResult getSyncReplayResult(AlignmentILPCalculator calculator, TIntList moves, int xTrace,
-			double minCostMoveModel, int time) {
+			double minCostMoveModel, int time, boolean reliable) {
 		List<StepTypes> stepTypes = new ArrayList<StepTypes>(moves.size());
 		List<Object> nodeInstance = new ArrayList<Object>(moves.size());
 
@@ -280,7 +281,7 @@ public class HeuristicPNetReplayerAlgorithm implements IPNReplayAlgorithm {
 
 		SyncReplayResult res = new SyncReplayResult(nodeInstance, stepTypes, xTrace);
 
-		res.setReliable(true);
+		res.setReliable(reliable);
 		Map<String, Double> info = new HashMap<String, Double>();
 		info.put(PNRepResult.RAWFITNESSCOST, (mmCost + lmCost + smCost));
 
@@ -295,7 +296,7 @@ public class HeuristicPNetReplayerAlgorithm implements IPNReplayAlgorithm {
 		} else {
 			info.put(PNRepResult.MOVEMODELFITNESS, 1.0);
 		}
-		info.put(PNRepResult.NUMSTATEGENERATED, 0.0);
+		info.put(PNRepResult.NUMSTATEGENERATED, (double) calculator.steps);
 		info.put(PNRepResult.QUEUEDSTATE, 0.0);
 
 		// set info fitness
