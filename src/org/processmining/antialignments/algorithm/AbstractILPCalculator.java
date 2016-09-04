@@ -42,7 +42,7 @@ public abstract class AbstractILPCalculator {
 	protected final Place[] short2place;
 	protected final short[] trans2label;
 	protected final short[][] log;
-	protected final TObjectShortHashMap<Object> trans2int;
+	protected final TObjectShortHashMap<Object> trans2short;
 	protected final TObjectShortHashMap<Object> place2int;
 	protected final short invisibleTransitions;
 
@@ -124,10 +124,10 @@ public abstract class AbstractILPCalculator {
 		short places = 0;
 
 		short2trans = new Transition[net.getTransitions().size()];
-		trans2int = new TObjectShortHashMap<>(net.getTransitions().size() / 2 * 3, 0.7f, (short) 0);
+		trans2short = new TObjectShortHashMap<>(net.getTransitions().size() / 2 * 3, 0.7f, (short) 0);
 		for (Transition t : net.getTransitions()) {
 			if (t.isInvisible()) {
-				trans2int.put(t, transitions);
+				trans2short.put(t, transitions);
 				short2trans[transitions] = t;
 				transitions++;
 			}
@@ -135,7 +135,7 @@ public abstract class AbstractILPCalculator {
 		invisibleTransitions = transitions;
 		for (Transition t : net.getTransitions()) {
 			if (!t.isInvisible()) {
-				trans2int.put(t, transitions);
+				trans2short.put(t, transitions);
 				short2trans[transitions] = t;
 				transitions++;
 			}
@@ -158,14 +158,14 @@ public abstract class AbstractILPCalculator {
 			if (e instanceof Arc) {
 				if (e.getSource() instanceof Place) {
 					trans = (Transition) e.getTarget();
-					t = trans2int.get(trans);
+					t = trans2short.get(trans);
 				} else {
 					trans = (Transition) e.getSource();
-					t = trans2int.get(trans);
+					t = trans2short.get(trans);
 				}
 			} else if (e instanceof InhibitorArc) {
 				trans = (Transition) e.getTarget();
-				t = trans2int.get(trans);
+				t = trans2short.get(trans);
 			} else {
 				continue;
 			}
@@ -189,10 +189,10 @@ public abstract class AbstractILPCalculator {
 			if (e instanceof Arc) {
 				if (e.getSource() instanceof Place) {
 					p = place2int.get(e.getSource());
-					t = trans2int.get(e.getTarget());
+					t = trans2short.get(e.getTarget());
 					dir = (short) -((Arc) e).getWeight();
 				} else {
-					t = trans2int.get(e.getSource());
+					t = trans2short.get(e.getSource());
 					p = place2int.get(e.getTarget());
 					dir = (short) ((Arc) e).getWeight();
 				}

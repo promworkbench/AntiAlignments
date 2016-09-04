@@ -51,9 +51,9 @@ import org.processmining.plugins.replayer.replayresult.SyncReplayResult;
 public class HeuristicPNetReplayerAlgorithm implements IPNReplayAlgorithm {
 
 	private Map<Transition, Integer> mapTrans2Cost;
-	private Integer maxNumOfStates;
 	private Map<XEventClass, Integer> mapEvClass2Cost;
 	private Map<Transition, Integer> mapSync2Cost;
+	private Integer maxNumOfStates;
 	private Marking initialMarking;
 	private Marking finalMarking;
 	private boolean usePartialOrderEvents;
@@ -185,7 +185,7 @@ public class HeuristicPNetReplayerAlgorithm implements IPNReplayAlgorithm {
 		}
 
 		AlignmentILPCalculator calculator = new AlignmentILPCalculator(net, initialMarking, finalMarking, label2short,
-				short2label, log);
+				short2label, log, mapTrans2Cost, mapEvClass2Cost, mapSync2Cost);
 		calculator.setLPSolve();
 		//		try {
 		//						calculator.doExperiment(initialMarking, finalMarking);

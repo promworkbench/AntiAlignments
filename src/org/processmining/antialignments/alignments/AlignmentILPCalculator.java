@@ -10,6 +10,7 @@ import gnu.trove.map.TShortObjectMap;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Map;
 
 import lpsolve.LpSolve;
 import nl.tue.astar.util.LPMatrix;
@@ -69,12 +70,30 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 
 	protected int steps;
 
+	private final int[] modelMoveCost;
+
+	private final int[] logMoveCost;
+
+	private final int[] syncMoveCost;
+
 	public AlignmentILPCalculator(PetrinetGraph net, Marking initialMarking, Marking finalMarking,
-			TObjectShortMap<String> label2short, TShortObjectMap<XEventClass> short2label, short[][] log) {
+			TObjectShortMap<String> label2short, TShortObjectMap<XEventClass> short2label, short[][] log,
+			Map<Transition, Integer> mapTrans2Cost, Map<XEventClass, Integer> mapEvClass2Cost,
+			Map<Transition, Integer> mapSync2Cost) {
 		super(net, initialMarking, finalMarking, label2short, short2label, log);
 
 		label2pos = new short[labels];
 
+		modelMoveCost = new int[transitions];
+		syncMoveCost = new int[transitions];
+		for (short i = 0; i < transitions; i++) {
+			modelMoveCost[i] = mapTrans2Cost.get(short2trans[i]);
+			syncMoveCost[i] = mapSync2Cost.get(short2trans[i]);
+		}
+		logMoveCost = new int[labels];
+		for (short i = 0; i < labels; i++) {
+			logMoveCost[i] = mapEvClass2Cost.get(short2label.get(i));
+		}
 		//		try {
 		//			gbEnv = new GRBEnv();
 		//			gbEnv.set(GRB.IntParam.OutputFlag, 0);
@@ -654,27 +673,16 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 		return lp;
 	}
 
-	private double getCostForModelMove(Transition trans) {
-		// TODO Auto-generated method stub
-		return trans.isInvisible() ? 0 : 1;
-	}
-
 	private double getCostForModelMove(short t) {
-		return getCostForModelMove(short2trans[t]);
+		return modelMoveCost[t];
 	}
 
-	private double getCostForLogMove(short s) {
-		// TODO Auto-generated method stub
-		return 1;
-	}
-
-	private double getCostForSync(Transition trans, short s) {
-		// TODO Auto-generated method stub
-		return 0;
+	private double getCostForLogMove(short label) {
+		return logMoveCost[label];
 	}
 
 	private double getCostForSync(short t, short s) {
-		return getCostForSync(short2trans[t], s);
+		return syncMoveCost[t];
 	}
 
 	public void doExperiment(Marking initialMarking, Marking finalMarking) throws LPMatrixException {
@@ -1016,9 +1024,9 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 		if (t == null) {
 			return getCostForLogMove(label2short.get(label));
 		} else if (label == null) {
-			return getCostForModelMove(t);
+			return getCostForModelMove(trans2short.get(t));
 		} else {
-			return getCostForSync(t, label2short.get(label));
+			return getCostForSync(trans2short.get(t), label2short.get(label));
 		}
 	}
 

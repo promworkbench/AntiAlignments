@@ -458,9 +458,9 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 
 	public AntiAlignments getAntiAlignments(Marking initialMarking, Marking finalMarking) throws LPMatrixException {
 
-		if (doAntiAlignmentTest(initialMarking, finalMarking)) {
-			return null;
-		}
+		//		if (doAntiAlignmentTest(initialMarking, finalMarking)) {
+		//			return null;
+		//		}
 
 		if (VERBOSE) {
 			System.out.println("Solving by drilling down");
@@ -629,18 +629,18 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 				if (e.getSource() instanceof Place) {
 					p = place2int.get(e.getSource());
 					trans = (Transition) e.getTarget();
-					t = trans2int.get(trans);
+					t = trans2short.get(trans);
 					dir = -((Arc) e).getWeight();
 				} else {
 					trans = (Transition) e.getSource();
-					t = trans2int.get(trans);
+					t = trans2short.get(trans);
 					p = place2int.get(e.getTarget());
 					dir = ((Arc) e).getWeight();
 				}
 			} else if (e instanceof InhibitorArc) {
 				p = place2int.get(e.getSource());
 				trans = (Transition) e.getTarget();
-				t = trans2int.get(trans);
+				t = trans2short.get(trans);
 				dir = 0;
 				type = LpSolve.EQ;
 			} else {
@@ -820,18 +820,18 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 				if (e.getSource() instanceof Place) {
 					p = place2int.get(e.getSource());
 					trans = (Transition) e.getTarget();
-					t = trans2int.get(trans);
+					t = trans2short.get(trans);
 					dir = -((Arc) e).getWeight();
 				} else {
 					trans = (Transition) e.getSource();
-					t = trans2int.get(trans);
+					t = trans2short.get(trans);
 					p = place2int.get(e.getTarget());
 					dir = ((Arc) e).getWeight();
 				}
 			} else if (e instanceof InhibitorArc) {
 				p = place2int.get(e.getSource());
 				trans = (Transition) e.getTarget();
-				t = trans2int.get(trans);
+				t = trans2short.get(trans);
 				dir = 0;
 				type = LpSolve.EQ;
 			} else {
@@ -997,18 +997,18 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 				if (e.getSource() instanceof Place) {
 					p = place2int.get(e.getSource());
 					trans = (Transition) e.getTarget();
-					t = trans2int.get(trans);
+					t = trans2short.get(trans);
 					dir = -((Arc) e).getWeight();
 				} else {
 					trans = (Transition) e.getSource();
-					t = trans2int.get(trans);
+					t = trans2short.get(trans);
 					p = place2int.get(e.getTarget());
 					dir = ((Arc) e).getWeight();
 				}
 			} else if (e instanceof InhibitorArc) {
 				p = place2int.get(e.getSource());
 				trans = (Transition) e.getTarget();
-				t = trans2int.get(trans);
+				t = trans2short.get(trans);
 				dir = 0;
 				type = LpSolve.EQ;
 			} else {
@@ -1069,18 +1069,18 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 				if (e.getSource() instanceof Place) {
 					p = place2int.get(e.getSource());
 					trans = (Transition) e.getTarget();
-					t = trans2int.get(trans);
+					t = trans2short.get(trans);
 					dir = -((Arc) e).getWeight();
 				} else {
 					trans = (Transition) e.getSource();
-					t = trans2int.get(trans);
+					t = trans2short.get(trans);
 					p = place2int.get(e.getTarget());
 					dir = ((Arc) e).getWeight();
 				}
 			} else if (e instanceof InhibitorArc) {
 				p = place2int.get(e.getSource());
 				trans = (Transition) e.getTarget();
-				t = trans2int.get(trans);
+				t = trans2short.get(trans);
 				dir = 0;
 				type = LpSolve.EQ;
 			} else {
