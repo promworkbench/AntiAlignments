@@ -1,15 +1,19 @@
 package org.processmining.antialignments.alignments;
 
-import gnu.trove.iterator.TObjectIntIterator;
+import gnu.trove.iterator.TObjectByteIterator;
+import gnu.trove.list.TIntList;
 import gnu.trove.list.TShortList;
+import gnu.trove.list.array.TIntArrayList;
 import gnu.trove.list.array.TShortArrayList;
-import gnu.trove.map.TObjectIntMap;
 import gnu.trove.map.TObjectShortMap;
 import gnu.trove.map.TShortObjectMap;
-import gnu.trove.map.hash.TObjectIntHashMap;
+import gnu.trove.map.hash.TObjectByteHashMap;
 import gnu.trove.map.hash.TObjectShortHashMap;
 import gnu.trove.map.hash.TShortObjectHashMap;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -26,6 +30,7 @@ import org.deckfour.xes.model.XLog;
 import org.deckfour.xes.model.XTrace;
 import org.processmining.framework.plugin.PluginContext;
 import org.processmining.framework.plugin.annotations.KeepInProMCache;
+import org.processmining.framework.util.Pair;
 import org.processmining.models.graphbased.directed.petrinet.Petrinet;
 import org.processmining.models.graphbased.directed.petrinet.PetrinetGraph;
 import org.processmining.models.graphbased.directed.petrinet.elements.Transition;
@@ -38,6 +43,8 @@ import org.processmining.plugins.petrinet.replayer.algorithms.costbasedcomplete.
 import org.processmining.plugins.petrinet.replayer.algorithms.costbasedcomplete.CostBasedCompleteParamProvider;
 import org.processmining.plugins.petrinet.replayer.annotations.PNReplayAlgorithm;
 import org.processmining.plugins.petrinet.replayresult.PNRepResult;
+import org.processmining.plugins.petrinet.replayresult.StepTypes;
+import org.processmining.plugins.replayer.replayresult.SyncReplayResult;
 
 @KeepInProMCache
 @PNReplayAlgorithm
@@ -51,25 +58,92 @@ public class HeuristicPNetReplayerAlgorithm implements IPNReplayAlgorithm {
 	private Marking finalMarking;
 	private boolean usePartialOrderEvents;
 	private XEventClassifier classifier;
-	private TShortObjectMap<String> short2label;
+	private TShortObjectMap<XEventClass> short2label;
 	private TObjectShortMap<String> label2short;
+	private TransEvClassMapping mapping;
+	private XLog xLog;
+	private XEventClasses classes;
+	private Representative[] log2xLog;
+
+	private static class LookupMap extends TObjectByteHashMap<Representative> {
+
+		public LookupMap(int size) {
+			super(size);
+		}
+
+		public Representative getKeyIfPresent(Representative key) {
+			int i = index(key);
+			if (i == -1) {
+				return null;
+			} else {
+				return (Representative) _set[i];
+			}
+		}
+	}
+
+	private static class Representative {
+		private final int number;
+		private final TIntList represented = new TIntArrayList(10);
+		private final TShortList trace;
+
+		public Representative(TShortList trace, int number) {
+			this.trace = trace;
+			this.number = number;
+		}
+
+		public void addRepresentedTrace(int trace) {
+			represented.add(trace);
+		}
+
+		public TIntList getRepresented() {
+			return represented;
+		}
+
+		public TShortList getTrace() {
+			return trace;
+		}
+
+		public boolean equals(Object o) {
+			return o != null && (o instanceof Representative ? ((Representative) o).trace.equals(trace) : false);
+		}
+
+		public int hashCode() {
+			return trace.hashCode();
+		}
+
+		public String toString() {
+			return trace.toString() + " representing " + represented.toString();
+		}
+
+		public int getNumber() {
+			return number;
+		}
+	}
 
 	public PNRepResult replayLog(PluginContext context, PetrinetGraph net, XLog xLog, TransEvClassMapping mapping,
 			IPNReplayParameter parameters) throws AStarException {
 
+		context.getProgress().setMaximum(xLog.size() + 1);
+		this.xLog = xLog;
+
+		this.mapping = mapping;
 		importParameters((CostBasedCompleteParam) parameters);
 		classifier = mapping.getEventClassifier();
+		final XLogInfo summary = XLogInfoFactory.createLogInfo(xLog, classifier);
+		this.classes = summary.getEventClasses();
 
-		TObjectIntMap<TShortList> tempLog = new TObjectIntHashMap<>(xLog.size());
+		LookupMap tempLog = new LookupMap(xLog.size());
 		short2label = new TShortObjectHashMap<>(net.getTransitions().size(), 0.7f, (short) -1);
 		label2short = new TObjectShortHashMap<>(net.getTransitions().size(), 0.7f, (short) -1);
 
 		short c = 0;
-		for (XTrace trace : xLog) {
+		int number = 0;
+		for (int t = 0; t < xLog.size(); t++) {
+			XTrace trace = xLog.get(t);
 			TShortList list = new TShortArrayList(trace.size());
 			for (XEvent event : trace) {
-				String clazz = classifier.getClassIdentity(event);
-				short id = label2short.putIfAbsent(clazz, c);
+				XEventClass clazz = classes.getClassOf(event);
+				short id = label2short.putIfAbsent(clazz.getId(), c);
 				if (id == label2short.getNoEntryValue()) {
 					short2label.put(c, clazz);
 					id = c;
@@ -77,13 +151,22 @@ public class HeuristicPNetReplayerAlgorithm implements IPNReplayAlgorithm {
 				}
 				list.add(id);
 			}
-			tempLog.adjustOrPutValue(list, 1, 1);
+			Representative rep = new Representative(list, number);
+			Representative existing = tempLog.getKeyIfPresent(rep);
+			if (null == existing) {
+				tempLog.put(rep, (byte) 1);
+				number++;
+			} else {
+				rep = existing;
+			}
+			rep.addRepresentedTrace(t);
 		}
+
 		for (Transition t : net.getTransitions()) {
 			XEventClass clazz = mapping.get(t);
 			short id = label2short.putIfAbsent(clazz.getId(), c);
 			if (id == label2short.getNoEntryValue()) {
-				short2label.put(c, clazz.getId());
+				short2label.put(c, clazz);
 				id = c;
 				c++;
 			}
@@ -91,28 +174,141 @@ public class HeuristicPNetReplayerAlgorithm implements IPNReplayAlgorithm {
 		}
 
 		int t = 0;
-		int[] frequencies = new int[tempLog.size()];
 		short[][] log = new short[tempLog.size()][];
-		TObjectIntIterator<TShortList> it = tempLog.iterator();
+		log2xLog = new Representative[tempLog.size()];
+		TObjectByteIterator<Representative> it = tempLog.iterator();
 		while (it.hasNext()) {
 			it.advance();
-			log[t] = it.key().toArray();
-			frequencies[t] = it.value();
+			log[it.key().getNumber()] = it.key().getTrace().toArray();
+			log2xLog[it.key().getNumber()] = it.key();
 			t++;
 		}
 
 		AlignmentILPCalculator calculator = new AlignmentILPCalculator(net, initialMarking, finalMarking, label2short,
 				short2label, log);
+		calculator.setLPSolve();
+		//		try {
+		//						calculator.doExperiment(initialMarking, finalMarking);
+		//		} catch (LPMatrixException e) {
+		//			// TODO Auto-generated catch block
+		//			e.printStackTrace();
+		//		}
+		calculator.setCutOffLength(7);
+		calculator.setMinEvents(2);
+		double minCost;
 		try {
-			for (int tr = 0; tr < log.length; tr++) {
-				calculator.solveSequential(initialMarking, finalMarking, tr);
-			}
+			TIntList moves = calculator.getAlignmentWithoutTrace(initialMarking, finalMarking);
+			minCost = calculator.getCost(moves, new short[0]);
 		} catch (LPMatrixException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+			minCost = 0.0;
+		}
+		context.getProgress().inc();
+
+		List<SyncReplayResult> results = new ArrayList<>(log.length);
+		for (int tr = 0; tr < log.length; tr++) {
+			try {
+				long start = System.currentTimeMillis();
+				TIntList moves = calculator.getAlignment(initialMarking, finalMarking, tr);
+				long end = System.currentTimeMillis();
+
+				Representative rep = log2xLog[tr];
+				//				XTrace trace = xLog.get(rep.getRepresented().get(0));
+				SyncReplayResult srr = getSyncReplayResult(calculator, moves, rep.getRepresented().get(0), minCost,
+						(int) (end - start));
+				for (int xt = 1; xt < rep.getRepresented().size(); xt++) {
+					srr.addNewCase(rep.getRepresented().get(xt));
+
+				}
+
+				results.add(srr);
+			} catch (LPMatrixException e) {
+			}
+			context.getProgress().inc();
+
 		}
 
-		return null;
+		PNRepResult result = new PNRepResult(results);
+
+		return result;
+	}
+
+	protected SyncReplayResult getSyncReplayResult(AlignmentILPCalculator calculator, TIntList moves, int xTrace,
+			double minCostMoveModel, int time) {
+		List<StepTypes> stepTypes = new ArrayList<StepTypes>(moves.size());
+		List<Object> nodeInstance = new ArrayList<Object>(moves.size());
+
+		double lmCost = 0;
+		double mmCost = 0;
+		double lmUpper = 0;
+		double mmUpper = 0;
+		double smCost = 0;
+		for (int i = 0; i < moves.size(); i++) {
+			Pair<Transition, Short> p = calculator.toPair(moves.get(i));
+
+			if (p.getSecond() == null) {
+				// Model Move
+				nodeInstance.add(p.getFirst());
+				if (p.getFirst().isInvisible()) {
+					stepTypes.add(StepTypes.MINVI);
+				} else {
+					stepTypes.add(StepTypes.MREAL);
+				}
+				mmCost += calculator.getCost(p.getFirst(), null);
+				mmUpper += calculator.getCost(p.getFirst(), null);
+			} else if (p.getFirst() == null) {
+				// Log Move
+				XEventClass clazz = short2label.get(p.getSecond());
+
+				stepTypes.add(StepTypes.L);
+				nodeInstance.add(clazz);
+				lmCost += calculator.getCost(null, clazz.toString());
+				lmUpper += calculator.getCost(null, clazz.toString());
+
+			} else {
+				// Sync move
+				XEventClass clazz = short2label.get(p.getSecond());
+
+				stepTypes.add(StepTypes.LMGOOD);
+				nodeInstance.add(p.getFirst());
+				smCost += calculator.getCost(p.getFirst(), clazz.toString());
+				mmUpper += calculator.getCost(p.getFirst(), null);
+				lmUpper += calculator.getCost(null, clazz.toString());
+
+			}
+
+		}
+
+		SyncReplayResult res = new SyncReplayResult(nodeInstance, stepTypes, xTrace);
+
+		res.setReliable(true);
+		Map<String, Double> info = new HashMap<String, Double>();
+		info.put(PNRepResult.RAWFITNESSCOST, (mmCost + lmCost + smCost));
+
+		if (lmCost > 0) {
+			info.put(PNRepResult.MOVELOGFITNESS, 1 - (lmCost / lmUpper));
+		} else {
+			info.put(PNRepResult.MOVELOGFITNESS, 1.0);
+		}
+
+		if (mmCost > 0) {
+			info.put(PNRepResult.MOVEMODELFITNESS, 1 - (mmCost / mmUpper));
+		} else {
+			info.put(PNRepResult.MOVEMODELFITNESS, 1.0);
+		}
+		info.put(PNRepResult.NUMSTATEGENERATED, 0.0);
+		info.put(PNRepResult.QUEUEDSTATE, 0.0);
+
+		// set info fitness
+		if (mmCost > 0 || lmCost > 0 || smCost > 0) {
+			info.put(PNRepResult.TRACEFITNESS, 1 - ((mmCost + lmCost + smCost) / (lmUpper + minCostMoveModel)));
+		} else {
+			info.put(PNRepResult.TRACEFITNESS, 1.0);
+		}
+		info.put(PNRepResult.TIME, (double) time);
+		info.put(PNRepResult.ORIGTRACELENGTH, (double) xLog.get(xTrace).size());
+		res.setInfo(info);
+		return res;
+
 	}
 
 	public String getHTMLInfo() {
@@ -224,6 +420,7 @@ public class HeuristicPNetReplayerAlgorithm implements IPNReplayAlgorithm {
 		initialMarking = parameters.getInitialMarking();
 		finalMarking = parameters.getFinalMarkings()[0];
 		usePartialOrderEvents = parameters.isPartiallyOrderedEvents();
+
 	}
 
 }

@@ -15,6 +15,7 @@ import lpsolve.LpSolve;
 import nl.tue.astar.util.LPMatrix;
 import nl.tue.astar.util.LPMatrix.LPMatrixException;
 
+import org.deckfour.xes.classification.XEventClass;
 import org.processmining.antialignments.algorithm.ilp.HybridEquationResult;
 import org.processmining.antialignments.pathfinder.AntiAlignments;
 import org.processmining.models.graphbased.directed.petrinet.Petrinet;
@@ -36,8 +37,8 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 	private final int maxLength;
 
 	public AntiAlignmentILPCalculator(Petrinet net, Marking initialMarking, Marking finalMarking,
-			TObjectShortMap<String> label2short, TShortObjectMap<String> short2label, short[][] log, int maxLength,
-			int maxFactor) {
+			TObjectShortMap<String> label2short, TShortObjectMap<XEventClass> short2label, short[][] log,
+			int maxLength, int maxFactor) {
 
 		super(net, initialMarking, finalMarking, label2short, short2label, log);
 

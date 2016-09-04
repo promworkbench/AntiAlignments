@@ -11,6 +11,7 @@ import gurobi.GRBEnv;
 import gurobi.GRBException;
 import nl.tue.astar.util.LPMatrix;
 
+import org.deckfour.xes.classification.XEventClass;
 import org.processmining.models.graphbased.directed.petrinet.Petrinet;
 import org.processmining.models.graphbased.directed.petrinet.PetrinetEdge;
 import org.processmining.models.graphbased.directed.petrinet.PetrinetGraph;
@@ -33,7 +34,7 @@ public abstract class AbstractILPCalculator {
 	protected final PetrinetGraph net;
 	protected final PetrinetSemantics semantics;
 	protected final TObjectShortMap<String> label2short;
-	protected final TShortObjectMap<String> short2label;
+	protected final TShortObjectMap<XEventClass> short2label;
 	protected final short transitions;
 	protected final short places;
 	protected final short labels;
@@ -82,7 +83,7 @@ public abstract class AbstractILPCalculator {
 		public void copyIntoMatrixFromColumn(int minCol, LPMatrix<?> lp, int lpRow, int lpCol) {
 			for (int i = 0; i < rows.length; i++) {
 				if (columns[i] >= minCol) {
-					lp.setMat(lpRow + rows[i], lpCol + columns[i], values[i]);
+					lp.setMat(lpRow + rows[i], lpCol + columns[i] - minCol, values[i]);
 				}
 			}
 		}
@@ -98,7 +99,7 @@ public abstract class AbstractILPCalculator {
 	}
 
 	public AbstractILPCalculator(PetrinetGraph net, Marking initialMarking, Marking finalMarking,
-			TObjectShortMap<String> label2short, TShortObjectMap<String> short2label, short[][] log) {
+			TObjectShortMap<String> label2short, TShortObjectMap<XEventClass> short2label, short[][] log) {
 		this.net = net;
 		//		this.initialMarking = initialMarking;
 		//		this.finalMarking = finalMarking;
@@ -241,6 +242,18 @@ public abstract class AbstractILPCalculator {
 		} else {
 			return new LPMatrix.LPSOLVE(rows, columns);
 		}
+	}
+
+	public void setCutOffLength(int cutOffLength) {
+		this.cutOffLength = cutOffLength;
+	}
+
+	public void setLPSolve() {
+		this.mode = MODE_LPSOLVE;
+	}
+
+	public void setGurobi() {
+		this.mode = MODE_GUROBI;
 	}
 
 }

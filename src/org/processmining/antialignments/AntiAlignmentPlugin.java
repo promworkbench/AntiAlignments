@@ -135,7 +135,7 @@ public class AntiAlignmentPlugin {
 		// are filled with fitting traces and firing sequences (including invisible transitions) and 
 		// the label2short map is built for future use. Max indicates the trace length.
 		TObjectShortMap<String> label2short = new TObjectShortHashMap<>();
-		TShortObjectMap<String> short2label = new TShortObjectHashMap<>();
+		TShortObjectMap<XEventClass> short2label = new TShortObjectHashMap<>();
 
 		TObjectIntMap<AlignedTrace> alignedTraces = new TObjectIntHashMap<>(alignments.size());
 
@@ -252,7 +252,7 @@ public class AntiAlignmentPlugin {
 
 	private static int rebuildLogFromAlignments(PNRepResult alignments, TransEvClassMapping mapping,
 			TObjectIntMap<AlignedTrace> alignedTraces, TObjectShortMap<String> label2short,
-			TShortObjectMap<String> short2label) {
+			TShortObjectMap<XEventClass> short2label) {
 		// move through alignments and rebuild event log to an aligned version with short labels.
 		// We need to build both an aligned log and aligned firing sequences. The latter includes
 		// invisible transitions which are required to compute the visited states later.
@@ -266,7 +266,7 @@ public class AntiAlignmentPlugin {
 		short mapped = 1;
 		for (XEventClass ec : mapping.values()) {
 			label2short.put(ec.toString(), mapped);
-			short2label.put(mapped, ec.toString());
+			short2label.put(mapped, ec);
 			mapped++;
 		}
 
@@ -298,7 +298,7 @@ public class AntiAlignmentPlugin {
 					c = (XEventClass) alignment.getNodeInstance().get(s);
 					if (label2short.get(c.toString()) == label2short.getNoEntryValue()) {
 						label2short.put(c.toString(), mapped);
-						short2label.put(mapped, c.toString());
+						short2label.put(mapped, c);
 						mapped++;
 					}
 				} else if (alignment.getStepTypes().get(s) == StepTypes.MREAL) {
@@ -308,7 +308,7 @@ public class AntiAlignmentPlugin {
 					m = label2short.get(t.getLabel());
 					if (m == label2short.getNoEntryValue()) {
 						label2short.put(t.getLabel(), mapped);
-						short2label.put(mapped, t.getLabel());
+						short2label.put(mapped, mapping.get(t));
 						m = mapped;
 						mapped++;
 					}
@@ -318,7 +318,7 @@ public class AntiAlignmentPlugin {
 					t = (Transition) alignment.getNodeInstance().get(s);
 					if (label2short.get(t.getLabel()) == label2short.getNoEntryValue()) {
 						label2short.put(t.getLabel(), mapped);
-						short2label.put(mapped, t.getLabel());
+						short2label.put(mapped, mapping.get(t));
 						mapped++;
 					}
 				} else {
