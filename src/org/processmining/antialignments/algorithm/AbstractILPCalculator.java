@@ -210,7 +210,7 @@ public abstract class AbstractILPCalculator {
 		while (it.hasNext()) {
 			it.advance();
 			short row = (short) (it.key() >>> 16);
-			short col = (short) (it.key() & 0x00FF);
+			short col = (short) (it.key() & 0x0000FFFF);
 			matrixAMin.rows[i] = row;
 			matrixAMin.columns[i] = col;
 			matrixAMin.values[i] = it.value();
@@ -223,7 +223,7 @@ public abstract class AbstractILPCalculator {
 		while (it.hasNext()) {
 			it.advance();
 			short row = (short) (it.key() >>> 16);
-			short col = (short) (it.key() & 0x00FF);
+			short col = (short) (it.key() & 0x0000FFFF);
 			matrixA.rows[i] = row;
 			matrixA.columns[i] = col;
 			matrixA.values[i] = it.value();
