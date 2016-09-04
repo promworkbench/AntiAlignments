@@ -28,7 +28,7 @@ import org.processmining.plugins.connectionfactories.logpetrinet.TransEvClassMap
 public abstract class AbstractILPCalculator {
 
 	public static boolean VERBOSE = true;
-	public static boolean NAMES = true;
+	public static boolean NAMES = false;
 
 	protected static final int MODE_LPSOLVE = 1;
 	protected static final int MODE_GUROBI = 2;

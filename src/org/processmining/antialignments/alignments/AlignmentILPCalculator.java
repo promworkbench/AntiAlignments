@@ -107,7 +107,6 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 	public TIntList getAlignment(Marking initialMarking, Marking finalMarking, int trace) throws LPMatrixException {
 
 		VERBOSE = true;
-		NAMES = true;
 		return solveSequential(initialMarking, finalMarking, log[trace]);
 
 	}
@@ -115,7 +114,6 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 	public TIntList getAlignmentWithoutTrace(Marking initialMarking, Marking finalMarking) throws LPMatrixException {
 
 		VERBOSE = true;
-		NAMES = true;
 		return solveSequential(initialMarking, finalMarking, new short[0]);
 
 	}
