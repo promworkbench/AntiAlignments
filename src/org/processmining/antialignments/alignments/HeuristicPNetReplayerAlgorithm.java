@@ -59,7 +59,7 @@ public class HeuristicPNetReplayerAlgorithm implements IPNReplayAlgorithm {
 	private boolean usePartialOrderEvents;
 	private XEventClassifier classifier;
 	private TShortObjectMap<XEventClass> short2label;
-	private TObjectShortMap<String> label2short;
+	private TObjectShortMap<XEventClass> label2short;
 	private TransEvClassMapping mapping;
 	private XLog xLog;
 	private XEventClasses classes;
@@ -143,7 +143,7 @@ public class HeuristicPNetReplayerAlgorithm implements IPNReplayAlgorithm {
 			TShortList list = new TShortArrayList(trace.size());
 			for (XEvent event : trace) {
 				XEventClass clazz = classes.getClassOf(event);
-				short id = label2short.putIfAbsent(clazz.getId(), c);
+				short id = label2short.putIfAbsent(clazz, c);
 				if (id == label2short.getNoEntryValue()) {
 					short2label.put(c, clazz);
 					id = c;
@@ -164,13 +164,12 @@ public class HeuristicPNetReplayerAlgorithm implements IPNReplayAlgorithm {
 
 		for (Transition t : net.getTransitions()) {
 			XEventClass clazz = mapping.get(t);
-			short id = label2short.putIfAbsent(clazz.getId(), c);
+			short id = label2short.putIfAbsent(clazz, c);
 			if (id == label2short.getNoEntryValue()) {
 				short2label.put(c, clazz);
 				id = c;
 				c++;
 			}
-			label2short.putIfAbsent(t.getLabel(), id);
 		}
 
 		int t = 0;
@@ -185,7 +184,7 @@ public class HeuristicPNetReplayerAlgorithm implements IPNReplayAlgorithm {
 		}
 
 		AlignmentILPCalculator calculator = new AlignmentILPCalculator(net, initialMarking, finalMarking, label2short,
-				short2label, log, mapTrans2Cost, mapEvClass2Cost, mapSync2Cost);
+				short2label, mapping, log, mapTrans2Cost, mapEvClass2Cost, mapSync2Cost);
 		calculator.setLPSolve();
 		//		try {
 		//						calculator.doExperiment(initialMarking, finalMarking);
@@ -262,8 +261,8 @@ public class HeuristicPNetReplayerAlgorithm implements IPNReplayAlgorithm {
 
 				stepTypes.add(StepTypes.L);
 				nodeInstance.add(clazz);
-				lmCost += calculator.getCost(null, clazz.toString());
-				lmUpper += calculator.getCost(null, clazz.toString());
+				lmCost += calculator.getCost(null, clazz);
+				lmUpper += calculator.getCost(null, clazz);
 
 			} else {
 				// Sync move
@@ -271,9 +270,9 @@ public class HeuristicPNetReplayerAlgorithm implements IPNReplayAlgorithm {
 
 				stepTypes.add(StepTypes.LMGOOD);
 				nodeInstance.add(p.getFirst());
-				smCost += calculator.getCost(p.getFirst(), clazz.toString());
+				smCost += calculator.getCost(p.getFirst(), clazz);
 				mmUpper += calculator.getCost(p.getFirst(), null);
-				lmUpper += calculator.getCost(null, clazz.toString());
+				lmUpper += calculator.getCost(null, clazz);
 
 			}
 

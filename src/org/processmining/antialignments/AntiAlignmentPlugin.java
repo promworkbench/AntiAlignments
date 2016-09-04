@@ -17,7 +17,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Vector;
 
 import nl.tue.astar.AStarException;
@@ -134,8 +133,8 @@ public class AntiAlignmentPlugin {
 		// We need to rebuild the log using the alignments. The frequencies and alignedlog objects
 		// are filled with fitting traces and firing sequences (including invisible transitions) and 
 		// the label2short map is built for future use. Max indicates the trace length.
-		TObjectShortMap<String> label2short = new TObjectShortHashMap<>();
-		TShortObjectMap<XEventClass> short2label = new TShortObjectHashMap<>();
+		TObjectShortMap<XEventClass> label2short = new TObjectShortHashMap<>(mapping.size(), 0.7f, (short) -1);
+		TShortObjectMap<XEventClass> short2label = new TShortObjectHashMap<>(mapping.size(), 0.7f, (short) -1);
 
 		TObjectIntMap<AlignedTrace> alignedTraces = new TObjectIntHashMap<>(alignments.size());
 
@@ -163,7 +162,7 @@ public class AntiAlignmentPlugin {
 
 		AntiAlignmentILPCalculator calculator2 = null;
 		calculator2 = new AntiAlignmentILPCalculator(net, initialMarking, finalMarking, label2short, short2label,
-				alignedLog, max, maxFactor);
+				mapping, alignedLog, max, maxFactor);
 
 		AntiAlignments aa;
 
@@ -251,7 +250,7 @@ public class AntiAlignmentPlugin {
 	}
 
 	private static int rebuildLogFromAlignments(PNRepResult alignments, TransEvClassMapping mapping,
-			TObjectIntMap<AlignedTrace> alignedTraces, TObjectShortMap<String> label2short,
+			TObjectIntMap<AlignedTrace> alignedTraces, TObjectShortMap<XEventClass> label2short,
 			TShortObjectMap<XEventClass> short2label) {
 		// move through alignments and rebuild event log to an aligned version with short labels.
 		// We need to build both an aligned log and aligned firing sequences. The latter includes
@@ -265,13 +264,9 @@ public class AntiAlignmentPlugin {
 		// add all mapped objects first
 		short mapped = 1;
 		for (XEventClass ec : mapping.values()) {
-			label2short.put(ec.toString(), mapped);
+			label2short.put(ec, mapped);
 			short2label.put(mapped, ec);
 			mapped++;
-		}
-
-		for (Entry<Transition, XEventClass> entry : mapping.entrySet()) {
-			label2short.putIfAbsent(entry.getKey().getLabel(), label2short.get(entry.getValue().toString()));
 		}
 
 		int max = 0;
@@ -291,13 +286,13 @@ public class AntiAlignmentPlugin {
 					// Corresponding nodeStep is a transition.
 					t = (Transition) alignment.getNodeInstance().get(s);
 					c = mapping.get(t);
-					m = label2short.get(t.getLabel());
+					m = label2short.get(mapping.get(t));
 				} else if (alignment.getStepTypes().get(s) == StepTypes.L) {
 					// log move
 					// Corresponding nodeStep is an event class.
 					c = (XEventClass) alignment.getNodeInstance().get(s);
-					if (label2short.get(c.toString()) == label2short.getNoEntryValue()) {
-						label2short.put(c.toString(), mapped);
+					if (label2short.get(c) == label2short.getNoEntryValue()) {
+						label2short.put(c, mapped);
 						short2label.put(mapped, c);
 						mapped++;
 					}
@@ -305,9 +300,9 @@ public class AntiAlignmentPlugin {
 					// Model move on visible transition
 					// Corresponding nodeStep is a transition.
 					t = (Transition) alignment.getNodeInstance().get(s);
-					m = label2short.get(t.getLabel());
+					m = label2short.get(mapping.get(t));
 					if (m == label2short.getNoEntryValue()) {
-						label2short.put(t.getLabel(), mapped);
+						label2short.put(mapping.get(t), mapped);
 						short2label.put(mapped, mapping.get(t));
 						m = mapped;
 						mapped++;
@@ -316,8 +311,8 @@ public class AntiAlignmentPlugin {
 					// model move on invisible transition
 					// Corresponding nodeStep is a transition.
 					t = (Transition) alignment.getNodeInstance().get(s);
-					if (label2short.get(t.getLabel()) == label2short.getNoEntryValue()) {
-						label2short.put(t.getLabel(), mapped);
+					if (label2short.get(mapping.get(t)) == label2short.getNoEntryValue()) {
+						label2short.put(mapping.get(t), mapped);
 						short2label.put(mapped, mapping.get(t));
 						mapped++;
 					}

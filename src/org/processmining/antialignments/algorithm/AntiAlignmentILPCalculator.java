@@ -5,6 +5,7 @@ import gnu.trove.list.array.TShortArrayList;
 import gnu.trove.map.TObjectShortMap;
 import gnu.trove.map.TShortObjectMap;
 
+import java.io.FileWriter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -29,6 +30,7 @@ import org.processmining.models.semantics.IllegalTransitionException;
 import org.processmining.models.semantics.petrinet.Marking;
 import org.processmining.models.semantics.petrinet.PetrinetSemantics;
 import org.processmining.models.semantics.petrinet.impl.PetrinetSemanticsFactory;
+import org.processmining.plugins.connectionfactories.logpetrinet.TransEvClassMapping;
 
 public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 
@@ -37,10 +39,10 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 	private final int maxLength;
 
 	public AntiAlignmentILPCalculator(Petrinet net, Marking initialMarking, Marking finalMarking,
-			TObjectShortMap<String> label2short, TShortObjectMap<XEventClass> short2label, short[][] log,
-			int maxLength, int maxFactor) {
+			TObjectShortMap<XEventClass> label2short, TShortObjectMap<XEventClass> short2label,
+			TransEvClassMapping mapping, short[][] log, int maxLength, int maxFactor) {
 
-		super(net, initialMarking, finalMarking, label2short, short2label, log);
+		super(net, initialMarking, finalMarking, label2short, short2label, mapping, log);
 
 		this.maxLength = maxLength;
 		this.maxFactor = maxFactor;
@@ -81,12 +83,24 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 			}
 
 			matrix = setupLpForHybrid(maxLengthX, maxLengthY, true, marking, finalMarking, traceToIgnore, startTracesAt);
+
+			//			FileWriter writer;
+			//			try {
+			//				writer = new FileWriter("D:/temp/antialignment/debugLP.csv");
+			//				matrix.printLp(writer, ";");
+			//				writer.close();
+			//				((LpSolve) matrix.toSolver()).writeLp("D:/temp/antialignment/debugLP.lp");
+			//
+			//			} catch (Exception e1) {
+			//				return;
+			//			}
+
 			int[] hd = new int[log.length];
 			// Determine an intermediate marking at lengthX visible steps
 			HybridEquationResult nextResult = determineSplitMarkingForHybrid(matrix, maxLengthX, startTracesAt,
 					maxLengthY == 0, antiAlignment, firingSequence, hd);
 
-			if (VERBOSE) {
+			if (VERBOSE && nextResult != null) {
 				System.out.println("Marking reached: " + nextResult.getMarking() + " in " + nextResult.getLengthX()
 						+ " steps and estimating " + nextResult.getLengthY() + " remaining steps.");
 			}
@@ -105,6 +119,21 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 								+ " < " + intermediate.getLengthY());
 					}
 					nextResult.undo(antiAlignment, firingSequence);
+				}
+
+				if (antiAlignment.isEmpty()) {
+					System.err.println("Infeasible model");
+					FileWriter writer;
+					try {
+						writer = new FileWriter("D:/temp/antialignment/debugLP-AntiAlignment.csv");
+						matrix.printLp(writer, ";");
+						writer.close();
+						((LpSolve) matrix.toSolver()).writeLp("D:/temp/antialignment/debugLP-AntiAlignment.lp");
+
+					} catch (Exception e1) {
+						e1.printStackTrace();
+					}
+
 				}
 
 				// remove the last transition from the stack.
@@ -154,6 +183,13 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 				for (int t = 0; t < log.length; t++) {
 					hammingDistances[t] += hd[t];
 				}
+				int[] hdComputed = new int[log.length];
+				for (int t = 0; t < log.length; t++) {
+					hdComputed[t] = getHammingDistanceToTrace(log[t], antiAlignment.toArray())
+							- (log[t].length > antiAlignment.size() ? log[t].length - antiAlignment.size() : 0);
+				}
+				assert Arrays.equals(hdComputed, hammingDistances);
+
 				// Setup for next iteration
 				intermediate = nextResult;
 				splits.add(intermediate);
@@ -180,6 +216,9 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 		}
 
 		assert intermediate.getMarking().equals(finalMarking);
+		for (int t = 0; t < log.length; t++) {
+			hammingDistances[t] += log[t].length > antiAlignment.size() ? log[t].length - antiAlignment.size() : 0;
+		}
 
 		if (VERBOSE) {
 			int[] hdComputed = new int[log.length];
@@ -188,7 +227,7 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 			}
 			assert Arrays.equals(hdComputed, hammingDistances);
 
-			System.out.println("Anti alignment: " + toString(antiAlignment.toArray()));
+			System.out.println("Anti alignment: " + toString(firingSequence));
 			System.out.println("Hamming Distances solved:   " + Arrays.toString(hammingDistances));
 			System.out.println("Hamming Distances computed: " + Arrays.toString(hdComputed));
 			System.out.println("Dlog: " + getMinimalHammingDistanceToLog(antiAlignment.toArray(), log, traceToIgnore));
@@ -463,7 +502,7 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 		//		}
 
 		if (VERBOSE) {
-			System.out.println("Solving by drilling down");
+			System.out.println("Solving using sequential hybrid approach.");
 		}
 
 		cutOffLength = 15;
@@ -497,7 +536,7 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 		antiAlignments.getTraces()[log.length] = firingSequence;
 		antiAlignments.getMaxDistances()[log.length] = Math.max(getMaxTraceLength(-1), aa.length);
 		if (VERBOSE) {
-			System.out.println("Anti alignment: " + toString(aa));
+			System.out.println("Anti alignment: " + toString(firingSequence));
 			System.out.println("Firing Sequence: " + firingSequence);
 			System.out.println("Dlog: " + hd);
 			System.out.flush();
@@ -712,19 +751,19 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 					if (trans2label[tr] < 0) {
 						//tr is a tau step. They don't add to the hamming distance
 						// this adds 1 to the hamming distance
-						lp.setMat(row + useHY * t, (e - startTracesAt) * transitions + tr, 0);
+						lp.setMat(row + t, (e - startTracesAt) * transitions + tr, 0);
 					} else if (e >= log[t].length) {
 						// e is passed the length of the trace
 						// this adds 1 to the hamming distance
-						lp.setMat(row + useHY * t, (e - startTracesAt) * transitions + tr, 1); // -1
+						lp.setMat(row + t, (e - startTracesAt) * transitions + tr, 1); // -1
 					} else if (e < log[t].length && !equalLabel(tr, log[t][e])) {
 						// e is in the trace window, but label does not match
 						// this adds 1 to the hamming distance
-						lp.setMat(row + useHY * t, (e - startTracesAt) * transitions + tr, 1); // 0
+						lp.setMat(row + t, (e - startTracesAt) * transitions + tr, 1); // 0
 					} else {
 						//e is in the trace window and label matches.
 						// this does not add to the hamming distance
-						lp.setMat(row + useHY * t, (e - startTracesAt) * transitions + tr, 0); //0
+						lp.setMat(row + t, (e - startTracesAt) * transitions + tr, 0); //0
 					}
 				}
 			}
@@ -800,6 +839,28 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 			if (i == iMax)
 				return b.append(']').toString();
 			b.append(", ");
+		}
+	}
+
+	private String toString(Vector<Transition> firingSequence) {
+		if (firingSequence == null)
+			return "null";
+		int iMax = firingSequence.size() - 1;
+		if (iMax == -1)
+			return "[]";
+
+		StringBuilder b = new StringBuilder();
+		b.append('[');
+		for (int i = 0;; i++) {
+			if (!firingSequence.get(i).isInvisible()) {
+				XEventClass clazz = mapping.get(firingSequence.get(i));
+				if (clazz != null && !clazz.equals(mapping.getDummyEventClass())) {
+					b.append(clazz);
+					if (i == iMax)
+						return b.append(']').toString();
+					b.append(", ");
+				}
+			}
 		}
 	}
 
@@ -1057,66 +1118,102 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 		//-                            AAB  >= m0
 		//-                            AAAA == mf             Xi - Xi+1<=0   Xi <= 1   Y.1 <= maxLength-lengthX 
 		LPMatrix<?> lp = setupMatrix(places * (maxLengthX + 1) + (maxLengthX - 1) + maxLengthX + 1/*                     */
-				//- y.1 - maxLength X_(lengthX-1).1 <=0 traceXHD     traceYHD
-				+ 1 /*                             */+ useHY * log.length, transitions * maxLengthX + transitions + 3);
+				//- y.1 - maxLength X_(lengthX-1).1 <=0 traceXHD  rem.traceHD   
+				+ 1 /*                             */+ log.length, transitions * maxLengthX + transitions + 2);
 
-		for (PetrinetEdge<? extends PetrinetNode, ? extends PetrinetNode> e : net.getEdges()) {
-			short p, t;
-			int dir;
-			int type = LpSolve.GE;
-			Transition trans;
-			if (e instanceof Arc) {
-				if (e.getSource() instanceof Place) {
-					p = place2int.get(e.getSource());
-					trans = (Transition) e.getTarget();
-					t = trans2short.get(trans);
-					dir = -((Arc) e).getWeight();
-				} else {
-					trans = (Transition) e.getSource();
-					t = trans2short.get(trans);
-					p = place2int.get(e.getTarget());
-					dir = ((Arc) e).getWeight();
-				}
-			} else if (e instanceof InhibitorArc) {
-				p = place2int.get(e.getSource());
-				trans = (Transition) e.getTarget();
-				t = trans2short.get(trans);
-				dir = 0;
-				type = LpSolve.EQ;
-			} else {
-				continue;
+		for (int block = 0; block < maxLengthX + 1; block++) {
+			int row = block * places;
+			for (int j = 0; j < block; j++) {
+				// Setup the A matrices
+				matrixA.copyIntoMatrix(lp, row, j * transitions);
 			}
 
-			for (int block = 0; block <= maxLengthX; block++) {
-				// First the whole A matrices.
-				int r = block * places + p;
-				lp.setConstrType(r, type);
-				lp.setRowName(r, "A" + block + "_" + p);
-				for (int c = t; c < block * transitions; c += transitions) {
-					// update the A matrix
-					lp.setMat(r, c, lp.getMat(r, c) + dir);
+			// Setup the A- matrices
+			if (block < maxLengthX) {
+				matrixAMin.copyIntoMatrix(lp, row, block * transitions);
+			} else {
+				matrixA.copyIntoMatrix(lp, row, block * transitions);
+			}
+			for (int p = 0; p < places; p++) {
+				lp.setConstrType(block * places + p, LPMatrix.GE);
+				if (NAMES) {
+					lp.setRowName(block * places + p, "r" + block + "P" + p);
+				}
+			}
+
+			for (int t = 0; t < transitions; t++) {
+				if (NAMES) {
+					lp.setColName(block * transitions + t, "c" + block + "T" + t);
+				}
+				if (block < maxLengthX) {
+					lp.setBinary(block * transitions + t, integerVariables);
+					lp.setUpbo(block * transitions + t, 1);
+				} else {
+					lp.setInt(block * transitions + t, integerVariables);
 				}
 
-				// Then, the  A- matrix.
-				int c = block * transitions + t;
-				if ((dir < 0 || trans.isInvisible()) && block < maxLengthX) {
-					lp.setColName(c, trans.getLabel().replace("\\n$invisible$", "") + "-" + block);
-					lp.setInt(c, integerVariables);
-					lp.setUpbo(c, 1.0);
-					// update the A matrix only for consumption and for invisible transitions
-					// or in the last block
-					lp.setMat(r, c, lp.getMat(r, c) + dir);
-				}
-
-				// Then, in the last block
-				if (block == maxLengthX) {
-					lp.setConstrType(r, LpSolve.EQ);
-					lp.setMat(r, c, lp.getMat(r, c) + dir);
-					lp.setColName(c, trans.getLabel().replace("\\n$invisible$", "") + "-" + block);
-					lp.setInt(c, integerVariables);
-				}
+				// OBJECTIVE IS SET LATER
 			}
 		}
+
+		//		for (PetrinetEdge<? extends PetrinetNode, ? extends PetrinetNode> e : net.getEdges()) {
+		//			short p, t;
+		//			int dir;
+		//			int type = LpSolve.GE;
+		//			Transition trans;
+		//			if (e instanceof Arc) {
+		//				if (e.getSource() instanceof Place) {
+		//					p = place2int.get(e.getSource());
+		//					trans = (Transition) e.getTarget();
+		//					t = trans2short.get(trans);
+		//					dir = -((Arc) e).getWeight();
+		//				} else {
+		//					trans = (Transition) e.getSource();
+		//					t = trans2short.get(trans);
+		//					p = place2int.get(e.getTarget());
+		//					dir = ((Arc) e).getWeight();
+		//				}
+		//			} else if (e instanceof InhibitorArc) {
+		//				p = place2int.get(e.getSource());
+		//				trans = (Transition) e.getTarget();
+		//				t = trans2short.get(trans);
+		//				dir = 0;
+		//				type = LpSolve.EQ;
+		//			} else {
+		//				continue;
+		//			}
+		//
+		//			for (int block = 0; block <= maxLengthX; block++) {
+		//				// First the whole A matrices.
+		//				int r = block * places + p;
+		//				lp.setConstrType(r, type);
+		//				lp.setRowName(r, "A" + block + "_" + p);
+		//				for (int c = t; c < block * transitions; c += transitions) {
+		//					// update the A matrix
+		//					lp.setMat(r, c, lp.getMat(r, c) + dir);
+		//				}
+		//
+		//				// Then, the  A- matrix.
+		//				int c = block * transitions + t;
+		//				if ((dir < 0 || trans.isInvisible()) && block < maxLengthX) {
+		//					lp.setColName(c, trans.getLabel().replace("\\n$invisible$", "") + "-" + block);
+		//					lp.setInt(c, integerVariables);
+		//					lp.setUpbo(c, 1.0);
+		//					// update the A matrix only for consumption and for invisible transitions
+		//					// or in the last block
+		//					lp.setMat(r, c, lp.getMat(r, c) + dir);
+		//				}
+		//
+		//				// Then, in the last block
+		//				if (block == maxLengthX) {
+		//					lp.setConstrType(r, LpSolve.EQ);
+		//					lp.setMat(r, c, lp.getMat(r, c) + dir);
+		//					lp.setColName(c, trans.getLabel().replace("\\n$invisible$", "") + "-" + block);
+		//					lp.setInt(c, integerVariables);
+		//				}
+		//			}
+		//		}
+
 		int row = places * (maxLengthX + 1);
 		// set up the comparisons and sums
 		for (int i = 0; i < maxLengthX - 1; i++) {
@@ -1126,7 +1223,9 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 			for (int t = (i + 1) * transitions; t < (i + 2) * transitions; t++) {
 				lp.setMat(row + i, t, trans2label[t % transitions] < 0 ? 0 : -1);
 			}
-			lp.setRowName(row + i, "X" + i + "~X" + (i + 1));
+			if (NAMES) {
+				lp.setRowName(row + i, "X" + i + "~X" + (i + 1));
+			}
 			lp.setConstrType(row + i, LpSolve.GE);
 		}
 
@@ -1136,7 +1235,9 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 			for (int t = i * transitions; t < (i + 1) * transitions; t++) {
 				lp.setMat(row + i, t, trans2label[t % transitions] < 0 ? 0 : 1);
 			}
-			lp.setRowName(row + i, "X" + i + ".1");
+			if (NAMES) {
+				lp.setRowName(row + i, "X" + i + ".1");
+			}
 			lp.setConstrType(row + i, LpSolve.LE);
 		}
 
@@ -1145,7 +1246,9 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 		for (int t = 0; t < transitions; t++) {
 			lp.setMat(row, maxLengthX * transitions + t, trans2label[t] < 0 ? 0 : 1);
 		}
-		lp.setRowName(row, "Y.1");
+		if (NAMES) {
+			lp.setRowName(row, "Y.1");
+		}
 		lp.setConstrType(row, LpSolve.LE);
 
 		row++;
@@ -1154,7 +1257,9 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 			lp.setMat(row, (maxLengthX - 1) * transitions + t, trans2label[t] < 0 ? 0 : -maxLengthY);
 			lp.setMat(row, maxLengthX * transitions + t, trans2label[t] < 0 ? 0 : 1);
 		}
-		lp.setRowName(row, "Y~X_l");
+		if (NAMES) {
+			lp.setRowName(row, "Y~X_l");
+		}
 		lp.setConstrType(row, LpSolve.LE);
 
 		double maxOccInY = 0;
@@ -1166,62 +1271,37 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 				for (int e = startTracesAt; e < startTracesAt + maxLengthX; e++) {
 					if (trans2label[tr] < 0) {
 						//tr is a tau step. They don't add to the hamming distance
-						// this adds 1 to the hamming distance
-						lp.setMat(row + useHY * t, (e - startTracesAt) * transitions + tr, 0);
+						// this adds 0 to the hamming distance
+						lp.setMat(row + t, (e - startTracesAt) * transitions + tr, 0);
 					} else if (e >= log[t].length) {
 						// e is passed the length of the trace
 						// this adds 1 to the hamming distance
-						lp.setMat(row + useHY * t, (e - startTracesAt) * transitions + tr, 1); // -1
+						lp.setMat(row + t, (e - startTracesAt) * transitions + tr, 1);
 					} else if (e < log[t].length && !equalLabel(tr, log[t][e])) {
 						// e is in the trace window, but label does not match
 						// this adds 1 to the hamming distance
-						lp.setMat(row + useHY * t, (e - startTracesAt) * transitions + tr, 1); // 0
+						lp.setMat(row + t, (e - startTracesAt) * transitions + tr, 1);
 					} else {
 						//e is in the trace window and label matches.
 						// this does not add to the hamming distance
-						lp.setMat(row + useHY * t, (e - startTracesAt) * transitions + tr, 0); //0
-					}
-				}
-
-				if (useHY == 2) {
-					// what's a guess for the hamming distance of the y's to trace t?
-					for (int e = startTracesAt + maxLengthX; e < startTracesAt + maxLengthX + maxLengthY
-							&& e < log[t].length; e++) {
-						if (equalLabel(tr, log[t][e])) {
-							// e is in the trace window and label matches
-							double val = lp.getMat(row + useHY * t + 1, maxLengthX * transitions + tr) + 1;
-							lp.setMat(row + useHY * t + 1, maxLengthX * transitions + tr, val);
-							if (t != traceToIgnore && val > maxOccInY) {
-								maxOccInY = val;
-							}
-						}
+						lp.setMat(row + t, (e - startTracesAt) * transitions + tr, 0);
 					}
 				}
 
 				if (tr == 0) {
 					// Setup the rows for this trace;
-					lp.setRowName(row + useHY * t, "Hx-t" + t);
+					if (NAMES) {
+						lp.setRowName(row + t, "Hx-t" + t);
+					}
 
 					if (t == traceToIgnore) {
-						// minus g for the removed trace.
-						lp.setMat(row + useHY * t, transitions * (maxLengthX + 1) + 2, -1);
-						lp.setConstrType(row + useHY * t, LpSolve.EQ);
+						// minus HD for the removes trace
+						lp.setMat(row + t, transitions * (maxLengthX + 1) + 1, -1);
+						lp.setConstrType(row + t, LpSolve.EQ);
 					} else {
-						// minus hx
-						lp.setMat(row + useHY * t, transitions * (maxLengthX + 1), -1);
-						// minus hy
-						lp.setConstrType(row + useHY * t, LpSolve.GE);
-					}
-					if (useHY == 2) {
-						lp.setRowName(row + useHY * t + 1, "Hy-t" + t);
-						if (t == traceToIgnore) {
-							// minus g for the removed trace.
-							lp.setConstrType(row + useHY * t + 1, LpSolve.GE);
-						} else {
-							// minus hy
-							lp.setMat(row + useHY * t + 1, transitions * (maxLengthX + 1) + 1, -1);
-							lp.setConstrType(row + useHY * t + 1, LpSolve.GE);
-						}
+						// minus HX
+						lp.setMat(row + t, transitions * (maxLengthX + 1), -1);
+						lp.setConstrType(row + t, LpSolve.GE);
 					}
 
 				}
@@ -1234,7 +1314,6 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 		// Minimize all invisible transitions
 		for (int t = 0; t < transitions * maxLengthX; t++) {
 			// Minimize the number of INVISIBLE transition firings in the anti-alignment
-			lp.setObjective(t, trans2label[t % transitions] < 0 ? -1 : 0);
 		}
 		for (int t = transitions * maxLengthX; t < transitions * (maxLengthX + 1); t++) {
 			if (trans2label[t % transitions] >= 0) {
@@ -1245,43 +1324,38 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 				lp.setObjective(t, -1.0 / ((maxLengthX + maxLengthY) * (maxLengthX + maxLengthY)));
 			}
 		}
-		if (useHY == 1) {
-
-			double max = 0.0;
-			//		 Minimize overlap in Y vector
-			for (short tr = 0; tr < trans2label.length; tr++) {
-				for (int t = 0; t < log.length; t++) {
-					for (int e = startTracesAt + maxLengthX; e < startTracesAt + maxLengthX + maxLengthY
-							&& e < log[t].length; e++) {
-						if (equalLabel(tr, log[t][e])) {
-							// label at index e in trace t matched transition tr
-							// increase the objective by 1 for transition tr in vector Y
-							lp.setObjective(maxLengthX * transitions + tr,
-									lp.getObjective(maxLengthX * transitions + tr) + 1);
-						}
+		double max = 0.0;
+		//		 Minimize overlap in Y vector
+		for (short tr = 0; tr < trans2label.length; tr++) {
+			for (int t = 0; t < log.length; t++) {
+				for (int e = startTracesAt + maxLengthX; e < startTracesAt + maxLengthX + maxLengthY
+						&& e < log[t].length; e++) {
+					if (equalLabel(tr, log[t][e])) {
+						// label at index e in trace t matched transition tr
+						// increase the objective by 1 for transition tr in vector Y
+						lp.setObjective(maxLengthX * transitions + tr,
+								lp.getObjective(maxLengthX * transitions + tr) + 1);
 					}
 				}
-				if (lp.getObjective(maxLengthX * transitions + tr) > max) {
-					max = lp.getObjective(maxLengthX * transitions + tr);
-				}
 			}
-			max += 1.0;
-			for (short tr = 0; tr < trans2label.length; tr++) {
-				lp.setObjective(maxLengthX * transitions + tr, max - lp.getObjective(maxLengthX * transitions + tr));
+			if (lp.getObjective(maxLengthX * transitions + tr) > max) {
+				max = lp.getObjective(maxLengthX * transitions + tr);
 			}
-		} else {
-			// minimize hy = similarity to y
-			lp.setInt(transitions * (maxLengthX + 1) + 1, integerVariables);
-			lp.setObjective(transitions * (maxLengthX + 1) + 1, -1);
+		}
+		max += 1.0;
+		for (short tr = 0; tr < trans2label.length; tr++) {
+			lp.setObjective(maxLengthX * transitions + tr, max - lp.getObjective(maxLengthX * transitions + tr));
 		}
 
-		// maximize hx = minimal distance to the log
-		lp.setInt(transitions * (maxLengthX + 1), integerVariables);
+		if (NAMES) {
+			lp.setColName(transitions * (maxLengthX + 1), "Dlog");
+			lp.setColName(transitions * (maxLengthX + 1) + 1, "Drem");
+		}
+		// maximize Dlog
 		lp.setObjective(transitions * (maxLengthX + 1), (maxLengthX + maxLengthY) * (maxLengthX + maxLengthY));
 
-		// minimize gx = distance to the ignored trace
-		lp.setInt(transitions * (maxLengthX + 1) + 2, integerVariables);
-		lp.setObjective(transitions * (maxLengthX + 1) + 2, -(maxLengthX + maxLengthY));
+		// minimize Drem
+		lp.setObjective(transitions * (maxLengthX + 1) + 1, -(maxLengthX + maxLengthY));
 
 		lp.setMaxim();
 
@@ -1306,21 +1380,8 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 		}
 		// Y.1 <= maxLengthY
 		rhs[row] = maxLengthY;
-		row++;
-		// Y.1 - l*X_l <= 0
-		row++;
 
-		//		for (int t = 0; t < log.length; t++) {
-		//			if (startTracesAt > log[t].length) {
-		//				// trace is outside window, length = 0;
-		//				rhs[row + useHY * t] = 0;
-		//			} else if (log[t].length > startTracesAt + maxLengthX) {
-		//				// trace spans full window
-		//				rhs[row + useHY * t] = -maxLengthX;
-		//			} else {
-		//				rhs[row + useHY * t] = -(log[t].length - startTracesAt);
-		//			}
-		//		}
+		// Y.1 - l*X_l <= 0
 
 		lp.setRhVec(rhs);
 
@@ -1365,7 +1426,7 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 							// single visible transition
 							assert ((int) (vars[t] + 0.5)) == 1;
 							firingSequence.push(short2trans[t % transitions]);
-							antiAlignment.add(label2short.get(short2trans[t % transitions].getLabel()));
+							antiAlignment.add(trans2label[t % transitions]);
 						}
 					}
 				}
@@ -1378,14 +1439,14 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 			// compute the hamming distances for the prefixes
 			int row = (maxLengthX + 1) * places + 2 * maxLengthX + 1;
 			for (int t = 0; t < log.length; t++) {
-				double hd_t = -matrix.getRh(row);
+				double hd_t = 0;// -matrix.getRh(row);
 				for (int v = 0; v < maxLengthX * transitions; v++) {
 					hd_t += vars[v] * matrix.getMat(row, v);
 				}
 
 				// round hamming distance
 				hammingDistances[t] += (int) (hd_t + 0.5);
-				row += useHY;
+				row++;
 			}
 
 			return new HybridEquationResult(intermediate, lengthX, lengthY);

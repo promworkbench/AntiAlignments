@@ -23,17 +23,19 @@ import org.processmining.models.graphbased.directed.petrinet.elements.Transition
 import org.processmining.models.semantics.petrinet.Marking;
 import org.processmining.models.semantics.petrinet.PetrinetSemantics;
 import org.processmining.models.semantics.petrinet.impl.PetrinetSemanticsFactory;
+import org.processmining.plugins.connectionfactories.logpetrinet.TransEvClassMapping;
 
 public abstract class AbstractILPCalculator {
 
 	public static boolean VERBOSE = true;
+	public static boolean NAMES = true;
 
 	protected static final int MODE_LPSOLVE = 1;
 	protected static final int MODE_GUROBI = 2;
 
 	protected final PetrinetGraph net;
 	protected final PetrinetSemantics semantics;
-	protected final TObjectShortMap<String> label2short;
+	protected final TObjectShortMap<XEventClass> label2short;
 	protected final TShortObjectMap<XEventClass> short2label;
 	protected final short transitions;
 	protected final short places;
@@ -49,7 +51,6 @@ public abstract class AbstractILPCalculator {
 	protected GRBEnv gbEnv;
 
 	protected int mode;
-	protected int useHY = 1;
 	protected int cutOffLength = 5;
 	protected double backtrackThreshold = 2.0;
 
@@ -58,6 +59,7 @@ public abstract class AbstractILPCalculator {
 
 	// Represents the incidence matrix of the original net.
 	protected final Matrix matrixA;
+	protected TransEvClassMapping mapping;
 
 	protected static class Matrix {
 		public final short[] rows;
@@ -99,12 +101,14 @@ public abstract class AbstractILPCalculator {
 	}
 
 	public AbstractILPCalculator(PetrinetGraph net, Marking initialMarking, Marking finalMarking,
-			TObjectShortMap<String> label2short, TShortObjectMap<XEventClass> short2label, short[][] log) {
+			TObjectShortMap<XEventClass> label2short, TShortObjectMap<XEventClass> short2label,
+			TransEvClassMapping mapping, short[][] log) {
 		this.net = net;
 		//		this.initialMarking = initialMarking;
 		//		this.finalMarking = finalMarking;
 		this.label2short = label2short;
 		this.short2label = short2label;
+		this.mapping = mapping;
 		this.log = log;
 
 		this.semantics = PetrinetSemanticsFactory.regularPetrinetSemantics(Petrinet.class);
@@ -172,7 +176,7 @@ public abstract class AbstractILPCalculator {
 			if (trans.isInvisible()) {
 				trans2label[t] = -1;
 			} else {
-				trans2label[t] = label2short.get(trans.getLabel());
+				trans2label[t] = label2short.get(mapping.get(trans));
 			}
 		}
 

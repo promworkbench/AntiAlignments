@@ -27,14 +27,13 @@ import org.processmining.models.semantics.IllegalTransitionException;
 import org.processmining.models.semantics.petrinet.Marking;
 import org.processmining.models.semantics.petrinet.PetrinetSemantics;
 import org.processmining.models.semantics.petrinet.impl.PetrinetSemanticsFactory;
+import org.processmining.plugins.connectionfactories.logpetrinet.TransEvClassMapping;
 
 public class AlignmentILPCalculator extends AbstractILPCalculator {
 
 	private static final double EPSILON = 0.001;
 
 	private static final int NOMOVE = 0x0000FFFF;
-
-	private static boolean NAMES = true;
 
 	// number of columns in synchronous product matrix
 	private int spCols;
@@ -77,10 +76,10 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 	private final int[] syncMoveCost;
 
 	public AlignmentILPCalculator(PetrinetGraph net, Marking initialMarking, Marking finalMarking,
-			TObjectShortMap<String> label2short, TShortObjectMap<XEventClass> short2label, short[][] log,
-			Map<Transition, Integer> mapTrans2Cost, Map<XEventClass, Integer> mapEvClass2Cost,
-			Map<Transition, Integer> mapSync2Cost) {
-		super(net, initialMarking, finalMarking, label2short, short2label, log);
+			TObjectShortMap<XEventClass> label2short, TShortObjectMap<XEventClass> short2label,
+			TransEvClassMapping mapping, short[][] log, Map<Transition, Integer> mapTrans2Cost,
+			Map<XEventClass, Integer> mapEvClass2Cost, Map<Transition, Integer> mapSync2Cost) {
+		super(net, initialMarking, finalMarking, label2short, short2label, mapping, log);
 
 		label2pos = new short[labels];
 
@@ -88,7 +87,8 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 		syncMoveCost = new int[transitions];
 		for (short i = 0; i < transitions; i++) {
 			modelMoveCost[i] = mapTrans2Cost.get(short2trans[i]);
-			syncMoveCost[i] = mapSync2Cost.get(short2trans[i]);
+			Integer sc = mapSync2Cost.get(short2trans[i]);
+			syncMoveCost[i] = sc == null ? 0 : sc;
 		}
 		logMoveCost = new int[labels];
 		for (short i = 0; i < labels; i++) {
@@ -165,7 +165,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 
 		synchronousTransitions = syncLabelMap.length;
 		spCols = transitions + synchronousTransitions + traceWindow.length;
-		spRows = places + traceWindow.length + 1;
+		spRows = places + traceWindow.length;
 
 	}
 
@@ -237,7 +237,9 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 					int col = min * spCols + transitions + synchronousTransitions + e;
 					// token flow on event
 					lp.setMat(firstEventRow + e, col, -1);
-					lp.setMat(firstEventRow + e + 1, col, 1);
+					if (e < traceWindow.length - 1) {
+						lp.setMat(firstEventRow + e + 1, col, 1);
+					}
 
 				}
 			}
@@ -825,12 +827,14 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 				// Backtrack and increase minEvents at the first step. This will
 				// ensure that we don't loop.
 				System.err.println("Infeasible model");
+
 				FileWriter writer;
 				try {
-					writer = new FileWriter("D:/temp/antialignment/debugLP.csv");
+					//					((LpSolve) matrix.toSolver()).writeLp("D:/temp/antialignment/debugLP-Alignment.lp");
+					//					((LpSolve) matrix.toSolver()).writeMps("D:/temp/antialignment/debugLP-Alignment.mps");
+					writer = new FileWriter("D:/temp/antialignment/debugLP-Alignment.csv");
 					matrix.printLp(writer, ";");
 					writer.close();
-					((LpSolve) matrix.toSolver()).writeLp("D:/temp/antialignment/debugLP.lp");
 
 				} catch (Exception e1) {
 					e1.printStackTrace();
@@ -1020,7 +1024,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 		return ok && i == trace.length;
 	}
 
-	public double getCost(Transition t, String label) {
+	public double getCost(Transition t, XEventClass label) {
 		if (t == null) {
 			return getCostForLogMove(label2short.get(label));
 		} else if (label == null) {
