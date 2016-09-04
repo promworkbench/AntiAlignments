@@ -29,7 +29,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 
 	private static final double EPSILON = 0.001;
 
-	private static final boolean NAMES = true;
+	private static boolean NAMES = true;
 
 	// number of columns in synchronous product matrix
 	private int spCols;
@@ -297,7 +297,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 		matrixA.copyIntoMatrixFromColumn(invisibleTransitions, lp, maxLengthX * spRows, maxLengthX * spCols
 				+ transitions);
 		for (short t = invisibleTransitions; t < transitions; t++) {
-			int col = maxLengthX * spCols + transitions + t;
+			int col = maxLengthX * spCols + transitions - invisibleTransitions + t;
 			// Set Objective
 			lp.setObjective(col, getCostForSync(t, trans2label[t]) + 2 * EPSILON);
 			lp.setMat(acRow, col, getCostForSync(t, trans2label[t]));
@@ -666,6 +666,8 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 		LPMatrix<?> matrix;
 
 		VERBOSE = true;
+		NAMES = true;
+
 		cutOffLength = 5;
 		int minEvents = 2;
 
@@ -711,16 +713,16 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 			matrix = setupLpForHybrid(maxLengthX, Math.min(minEvents, log[traceToConsider].length - startTracesAt),
 					true, marking, finalMarking, traceToConsider, startTracesAt);
 
-			FileWriter writer;
-			try {
-				writer = new FileWriter("D:/temp/antialignment/debugLP.csv");
-				matrix.printLp(writer, ";");
-				writer.close();
-				((LpSolve) matrix.toSolver()).writeLp("D:/temp/antialignment/debugLP.lp");
-
-			} catch (Exception e1) {
-				return;
-			}
+			//			FileWriter writer;
+			//			try {
+			//				writer = new FileWriter("D:/temp/antialignment/debugLP.csv");
+			//				matrix.printLp(writer, ";");
+			//				writer.close();
+			//				((LpSolve) matrix.toSolver()).writeLp("D:/temp/antialignment/debugLP.lp");
+			//
+			//			} catch (Exception e1) {
+			//				return;
+			//			}
 
 			if (VERBOSE) {
 				System.out
@@ -774,6 +776,18 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 				//
 				// Backtrack and increase minEvents at the first step. This will
 				// ensure that we don't loop.
+				System.err.println("Infeasible model");
+				FileWriter writer;
+				try {
+					writer = new FileWriter("D:/temp/antialignment/debugLP.csv");
+					matrix.printLp(writer, ";");
+					writer.close();
+					((LpSolve) matrix.toSolver()).writeLp("D:/temp/antialignment/debugLP.lp");
+
+				} catch (Exception e1) {
+					e1.printStackTrace();
+					return;
+				}
 				break;
 			}
 			long end = System.currentTimeMillis();
@@ -785,7 +799,6 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 			System.out.println();
 			System.out.println("Alignment done:");
 			printMoves(moves);
-			System.out.println();
 			//						assert checkFiringSequence(moves, initialMarking, finalMarking);
 			//						assert checkTrace(moves, log[traceToConsider]);
 			System.out.println("Is a firing sequence: " + checkFiringSequence(moves, initialMarking, finalMarking));
@@ -793,6 +806,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 			System.out.println("Alignment costs: " + alignmentCosts);
 			System.out.println("Setup time: " + setup);
 			System.out.println("Solve time: " + solve);
+			System.out.println();
 
 		}
 		//						try {
