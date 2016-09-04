@@ -1301,12 +1301,14 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 		if (log.length == 0 || (log.length == 1 && traceToIgnore >= 0)) {
 			// a DLog is a 0-column. A positive weight would make the model unbounded.
 			lp.setObjective(transitions * (maxLengthX + 1), -1);
+			// maximize Drem in this case.
+			lp.setObjective(transitions * (maxLengthX + 1) + 1, (maxLengthX + maxLengthY));
 		} else {
+			// maximize Dlog
 			lp.setObjective(transitions * (maxLengthX + 1), (maxLengthX + maxLengthY) * (maxLengthX + maxLengthY));
+			// minimize Drem
+			lp.setObjective(transitions * (maxLengthX + 1) + 1, -(maxLengthX + maxLengthY));
 		}
-
-		// minimize Drem
-		lp.setObjective(transitions * (maxLengthX + 1) + 1, -(maxLengthX + maxLengthY));
 
 		lp.setMaxim();
 
