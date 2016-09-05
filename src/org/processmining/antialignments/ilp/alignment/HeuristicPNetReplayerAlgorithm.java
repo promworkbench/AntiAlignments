@@ -87,30 +87,40 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 			rBound = 2000;
 		}
 
-		// estimate the number of columns
-		int cutOffEvent = 1;
-		int minEvent = 0;
+		calculator.setLPSolve();
+		gurobi = false;
+		cBound = 500;
+		rBound = 800;
 
 		// Set parameters just over the bounds for the ILP's
-		int columns, rows;
-		do {
+		int cutOffEvent = expectedModelMoves;
+		int minEvent = 1;
+		// estimate number of columns and rows (This is not exact!)
+		int columns = (net.getTransitions().size() + 2 * minEvent) * cutOffEvent + 2 * net.getTransitions().size()
+				+ label2short.size();
+		int rows = (net.getPlaces().size() + 2 * minEvent) * cutOffEvent + net.getPlaces().size() + label2short.size();
+
+		// the estimated minimum number of rows and colums are known.
+		while (rows < rBound && columns < cBound) {
+			// Try to increase without loosing too much CPU time in LpSolve
 			cutOffEvent += expectedModelMoves;
 			minEvent++;
-			// estimate number of columns and rows (This is not exact!)
 			columns = (net.getTransitions().size() + 2 * minEvent) * cutOffEvent + 2 * net.getTransitions().size()
 					+ label2short.size();
 			rows = (net.getPlaces().size() + 2 * minEvent) * cutOffEvent + net.getPlaces().size() + label2short.size();
+		}
 
-		} while (columns < cBound && rows < rBound);
-
-		// Make the problem smaller if it goes over the bound by more than 20%
-		while ((columns > 1.2 * cBound || rows > 1.2 * rBound) && cutOffEvent > 5) {
-			cutOffEvent = Math.max(cutOffEvent / 2, 5);
-			minEvent = Math.max(minEvent / 2, 1);
-			// estimate number of columns and rows (This is not exact!)
-			columns = (net.getTransitions().size() + 2 * minEvent) * cutOffEvent + 2 * net.getTransitions().size()
-					+ label2short.size();
-			rows = (net.getPlaces().size() + 2 * minEvent) * cutOffEvent + net.getPlaces().size() + label2short.size();
+		// But what if that fails?
+		if (columns > 2000 || rows > 2000) {
+			// Try to setup Gurobi?
+			if (calculator.setGurobi()) {
+				gurobi = true;
+				context.log("Solver set to Gurobi, because of problem size");
+			} else if (minEvent > 1) {
+				// cannot setup gurobi. Nothing we can do, but resort to smallest case.
+				minEvent = 1;
+				cutOffEvent = 1 + expectedModelMoves;
+			}
 
 		}
 
@@ -146,6 +156,7 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 
 				long start = System.currentTimeMillis();
 				TIntList moves = calculator.getAlignment(context.getProgress(), initialMarking, finalMarking, tr);
+				//				calculator.printMoves(moves, log[tr]);
 				boolean reliable = calculator.checkAndReorderFiringSequence(moves, initialMarking, finalMarking, true);
 				long end = System.currentTimeMillis();
 
@@ -175,9 +186,7 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 		result.addInfo(EXPECTEDMOVES, Integer.toString(expectedModelMoves));
 		result.addInfo(CUTOFF, Integer.toString(cutOffEvent));
 		result.addInfo(MINEVENT, Integer.toString(minEvent));
-		result.addInfo(
-				PNRepResult.VISTITLE,
- "Heuristic Alignments of "
+		result.addInfo(PNRepResult.VISTITLE, "Heuristic Alignments of "
 				+ XConceptExtension.instance().extractName(xLog) + " on " + net.getLabel());
 
 		return result;

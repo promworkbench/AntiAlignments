@@ -885,7 +885,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 		return newMarking;
 	}
 
-	private void printMoves(TIntList moves, short[] trace) {
+	public void printMoves(TIntList moves, short[] trace) {
 		double cost = 0;
 		int mmSeq = 0;
 		int lmSeq = 0;
@@ -999,14 +999,18 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 					int m = moves.get(modelMoveLocationStack[mPos]) & 0xFFFF0000;
 					m = m | (move & 0x0000FFFF);
 					moves.set(t_i, m);
+//					System.out.println("Removing: " + modelMoveLocationStack[lPos] + ". Merges with " + t_i
+//							+ " Checked:" + checked);
 					moves.removeAt(modelMoveLocationStack[mPos]);
-					mPos--;
+					// checked--, since array was shortened by one
+					if (modelMoveLocationStack[lPos] <= checked) {
+						checked--;
+					}
 					// t-- means: go to next move
 					// t -=2 means: process this move again
 					// t -=3 means: process previous move.
+					mPos--;
 					t_i -= 3;
-					// checked--, since array was shortened by one
-					checked--;
 				} else if (mergeMoves) {
 					// push on logMoveStack
 					lPos++;
@@ -1027,16 +1031,20 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 					int m = moves.get(logMoveLocationStack[lPos]) & 0x0000FFFF;
 					m = m | (move & 0xFFFF0000);
 					moves.set(t_i, m);
+					//					System.out.println("Removing: " + logMoveLocationStack[lPos] + ". Merges with " + t_i + " Checked:"
+					//							+ checked);
 					moves.removeAt(logMoveLocationStack[lPos]);
+					if (logMoveLocationStack[lPos] <= checked) {
+						checked--;
+					}
 					lPos--;
 					t_i -= 3;
-					checked--;
 				} else if (mergeMoves) {
 					mPos++;
 					modelMoveStack[mPos] = trans2label[t];
 					modelMoveLocationStack[mPos] = t_i;
 				}
-			} else {
+			} else if (trans2label[t] >= 0) {
 				// empty the modelmove stack
 				mPos = 0;
 				lPos = 0;
@@ -1050,6 +1058,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 					// so this transition was not enabled.
 					//				assert (t.isInvisible());
 					ok &= short2trans[t].isInvisible();
+					assert ok;
 					// push forward to first visible transition
 					int j;
 					for (j = t_i + 1; j < moves.size(); j++) {
