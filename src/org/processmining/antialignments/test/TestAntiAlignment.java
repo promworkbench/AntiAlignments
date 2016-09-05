@@ -557,8 +557,8 @@ public class TestAntiAlignment {
 		// Compute Alignments
 		PNRepResult alignments = alignmentAlgorithm.getAlignment(initialMarking, finalMarking, false);
 
-		return new AntiAlignmentPlugin().basicCodeStructureWithAlignments(net, initialMarking, finalMarking, xLog,
-				alignments, alignmentAlgorithm.mapping);
+		return new AntiAlignmentPlugin().basicCodeStructureWithAlignments(null, net, initialMarking, finalMarking,
+				xLog, alignments, alignmentAlgorithm.mapping);
 
 	}
 }

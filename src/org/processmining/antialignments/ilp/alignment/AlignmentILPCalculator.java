@@ -18,6 +18,7 @@ import nl.tue.astar.util.LPMatrix.LPMatrixException;
 
 import org.deckfour.xes.classification.XEventClass;
 import org.processmining.antialignments.ilp.AbstractILPCalculator;
+import org.processmining.framework.plugin.Progress;
 import org.processmining.framework.util.Pair;
 import org.processmining.models.graphbased.directed.petrinet.Petrinet;
 import org.processmining.models.graphbased.directed.petrinet.elements.Place;
@@ -103,15 +104,17 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 		//
 	}
 
-	public TIntList getAlignment(Marking initialMarking, Marking finalMarking, int trace) throws LPMatrixException {
+	public TIntList getAlignment(Progress progress, Marking initialMarking, Marking finalMarking, int trace)
+			throws LPMatrixException {
 
-		return solveSequential(initialMarking, finalMarking, log[trace]);
+		return solveSequential(progress, initialMarking, finalMarking, log[trace]);
 
 	}
 
-	public TIntList getAlignmentWithoutTrace(Marking initialMarking, Marking finalMarking) throws LPMatrixException {
+	public TIntList getAlignmentWithoutTrace(Progress progress, Marking initialMarking, Marking finalMarking)
+			throws LPMatrixException {
 
-		return solveSequential(initialMarking, finalMarking, new short[0]);
+		return solveSequential(progress, initialMarking, finalMarking, new short[0]);
 
 	}
 
@@ -707,7 +710,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 				for (cutOffLength = 1; cutOffLength < log[traceToConsider].length; cutOffLength++) {
 					for (minEvents = 1; minEvents <= cutOffLength; minEvents++) {
 						long start = System.currentTimeMillis();
-						TIntList moves = solveSequential(initialMarking, finalMarking, log[traceToConsider]);
+						TIntList moves = solveSequential(null, initialMarking, finalMarking, log[traceToConsider]);
 						long end = System.currentTimeMillis();
 
 						try {
@@ -732,7 +735,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 
 	}
 
-	protected TIntList solveSequential(Marking initialMarking, Marking finalMarking, short[] trace)
+	protected TIntList solveSequential(Progress progress, Marking initialMarking, Marking finalMarking, short[] trace)
 			throws LPMatrixException {
 
 		PetrinetSemantics semantics = PetrinetSemanticsFactory.regularPetrinetSemantics(Petrinet.class);
@@ -846,7 +849,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 			long end = System.currentTimeMillis();
 			setup += mid - start;
 			solve += end - mid;
-		} while (!marking.equals(finalMarking));
+		} while (!marking.equals(finalMarking) && (progress == null || !progress.isCancelled()));
 
 		if (VERBOSE) {
 			System.out.println();
@@ -984,6 +987,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 		short[] logMoveLocationStack = new short[moves.size()];
 		int lPos = -1;
 
+		int checked = -1;
 		boolean ok = true;
 		for (short t_i = 0; ok && t_i < moves.size(); t_i++) {
 			int move = moves.get(t_i);
@@ -997,7 +1001,12 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 					moves.set(t_i, m);
 					moves.removeAt(modelMoveLocationStack[mPos]);
 					mPos--;
-					t_i--;
+					// t-- means: go to next move
+					// t -=2 means: process this move again
+					// t -=3 means: process previous move.
+					t_i -= 3;
+					// checked--, since array was shortened by one
+					checked--;
 				} else if (mergeMoves) {
 					// push on logMoveStack
 					lPos++;
@@ -1010,7 +1019,8 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 
 			// LogMove handled
 
-			if (e == (short) NOMOVE) {
+			if (e == (short) NOMOVE && trans2label[t] >= 0) {
+				// Visible model move
 				if (lPos >= 0 && logMoveStack[lPos] == trans2label[t]) {
 					// there is a log move on the stack with this label
 					// merge them
@@ -1019,8 +1029,8 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 					moves.set(t_i, m);
 					moves.removeAt(logMoveLocationStack[lPos]);
 					lPos--;
-					t_i--;
-
+					t_i -= 3;
+					checked--;
 				} else if (mergeMoves) {
 					mPos++;
 					modelMoveStack[mPos] = trans2label[t];
@@ -1031,28 +1041,32 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 				mPos = 0;
 				lPos = 0;
 			}
-			try {
-				semantics.executeExecutableTransition(short2trans[t]);
-			} catch (IllegalTransitionException _) {
-				// so this transition was not enabled.
-				//				assert (t.isInvisible());
-				ok &= short2trans[t].isInvisible();
-				// push forward to first visible transition
-				int j;
-				for (j = t_i + 1; j < moves.size(); j++) {
-					Transition tj = short2trans[moves.get(j) >>> 16];
-					if (tj != null && tj.isInvisible()) {
-						moves.set(j - 1, moves.get(j));
-					} else {
-						moves.set(j - 1, move);
-						break;
+
+			if (t_i > checked) {
+				checked = t_i;
+				try {
+					semantics.executeExecutableTransition(short2trans[t]);
+				} catch (IllegalTransitionException _) {
+					// so this transition was not enabled.
+					//				assert (t.isInvisible());
+					ok &= short2trans[t].isInvisible();
+					// push forward to first visible transition
+					int j;
+					for (j = t_i + 1; j < moves.size(); j++) {
+						Transition tj = short2trans[moves.get(j) >>> 16];
+						if (tj != null && tj.isInvisible()) {
+							moves.set(j - 1, moves.get(j));
+						} else {
+							moves.set(j - 1, move);
+							break;
+						}
 					}
+					if (j == moves.size()) {
+						moves.set(j - 1, move);
+					}
+					t_i--;
+					continue;
 				}
-				if (j == moves.size()) {
-					moves.set(j - 1, move);
-				}
-				t_i--;
-				continue;
 			}
 		}
 

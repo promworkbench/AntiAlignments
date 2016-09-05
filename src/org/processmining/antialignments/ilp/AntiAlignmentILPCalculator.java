@@ -19,6 +19,7 @@ import nl.tue.astar.util.LPMatrix.LPMatrixException;
 import org.deckfour.xes.classification.XEventClass;
 import org.processmining.antialignments.ilp.util.AntiAlignments;
 import org.processmining.antialignments.ilp.util.HybridEquationResult;
+import org.processmining.framework.plugin.Progress;
 import org.processmining.models.graphbased.directed.petrinet.Petrinet;
 import org.processmining.models.graphbased.directed.petrinet.PetrinetEdge;
 import org.processmining.models.graphbased.directed.petrinet.PetrinetNode;
@@ -495,7 +496,8 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 		//		System.exit(0);
 	}
 
-	public AntiAlignments getAntiAlignments(Marking initialMarking, Marking finalMarking) throws LPMatrixException {
+	public AntiAlignments getAntiAlignments(Progress progress, Marking initialMarking, Marking finalMarking)
+			throws LPMatrixException {
 
 		//		if (doAntiAlignmentTest(initialMarking, finalMarking)) {
 		//			return null;
@@ -512,6 +514,9 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 		long start = System.currentTimeMillis();
 		solveSequential(maxLength, initialMarking, finalMarking, firingSequence, antiAlignment, -1);
 		long end = System.currentTimeMillis();
+		if (progress != null) {
+			progress.inc();
+		}
 		// FiringSequence and anti-alignment are known, but the distances to the log need to be computed.
 		short[] aa = antiAlignment.toArray();
 		int hd = getMinimalHammingDistanceToLog(aa, log, -1);
@@ -547,7 +552,7 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 		//		int[] basis = new int[lp.getNrows() + lp.getNcolumns() + 1];
 		//		lp.getBasis(basis, true);
 
-		for (int t = 0; t < log.length; t++) {
+		for (int t = 0; t < log.length && (progress == null || !progress.isCancelled()); t++) {
 			if (VERBOSE) {
 				System.out.println("-----------------------------------------------" + (t + 1) + " / " + log.length);
 				System.out.println("Removed Trace: " + toString(log[t]));
@@ -563,6 +568,9 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 			start = System.currentTimeMillis();
 			solveSequential(maxFactor * log[t].length, initialMarking, finalMarking, firingSequence, antiAlignment, t);
 			end = System.currentTimeMillis();
+			if (progress != null) {
+				progress.inc();
+			}
 			// FiringSequence and anti-alignment are known, but the distances to the log need to be computed.
 			aa = antiAlignment.toArray();
 			hd = getMinimalHammingDistanceToLog(aa, log, t);
@@ -584,7 +592,9 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 			System.out.println("-----------------------------------------------");
 		}
 		//		System.out.println(Arrays.toString(vars));
-
+		if (progress != null && progress.isCancelled()) {
+			return null;
+		}
 		return antiAlignments;
 
 	}

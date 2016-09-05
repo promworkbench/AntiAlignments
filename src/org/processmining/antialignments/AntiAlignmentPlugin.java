@@ -12,6 +12,7 @@ import org.processmining.contexts.uitopia.annotations.UITopiaVariant;
 import org.processmining.framework.connections.ConnectionCannotBeObtained;
 import org.processmining.framework.connections.ConnectionManager;
 import org.processmining.framework.plugin.PluginContext;
+import org.processmining.framework.plugin.Progress;
 import org.processmining.framework.plugin.annotations.Plugin;
 import org.processmining.framework.plugin.annotations.PluginLevel;
 import org.processmining.framework.plugin.annotations.PluginVariant;
@@ -41,7 +42,10 @@ public class AntiAlignmentPlugin {
 			PNLogReplayer replayer = new PNLogReplayer();
 			alignments = replayer.replayLog(context, net, log);
 
-			context.getProvidedObjectManager().createProvidedObject("Petrinet log replay result", alignments, context);
+			context.getProvidedObjectManager()
+					.createProvidedObject(
+							"Replay result for log " + XConceptExtension.instance().extractName(log) + " and "
+									+ net.getLabel(), alignments, context);
 
 			return measurePrecision(context, net, log, alignments);
 
@@ -76,14 +80,19 @@ public class AntiAlignmentPlugin {
 					context, net);
 			Marking finalMarking = finalMarkingConn.getObjectWithRole(FinalMarkingConnection.MARKING);
 
-			PNRepResult replayRes = basicCodeStructureWithAlignments(net, initialMarking, finalMarking, log,
-					alignments, mapping);
+			PNRepResult replayRes = basicCodeStructureWithAlignments(context.getProgress(), net, initialMarking,
+					finalMarking, log, alignments, mapping);
 			if (replayRes != null) {
 				context.addConnection(new PNRepResultAllRequiredParamConnection("Connection between replay result, "
 						+ XConceptExtension.instance().extractName(log) + ", and " + net.getLabel(), net, log, mapping,
 						null, null, replayRes));
 
 			}
+
+			context.getFutureResult(0).setLabel(
+					"Anti-alignments for log " + XConceptExtension.instance().extractName(log) + " and "
+							+ net.getLabel());
+
 			return replayRes;
 
 		} catch (ConnectionCannotBeObtained noConnection) {
@@ -94,13 +103,13 @@ public class AntiAlignmentPlugin {
 		return null;
 	}
 
-	public PNRepResult basicCodeStructureWithAlignments(Petrinet net, Marking initialMarking, Marking finalMarking,
-			XLog xLog, PNRepResult alignments, TransEvClassMapping mapping) {
+	public PNRepResult basicCodeStructureWithAlignments(Progress progress, Petrinet net, Marking initialMarking,
+			Marking finalMarking, XLog xLog, PNRepResult alignments, TransEvClassMapping mapping) {
 
 		HeuristicAntiAlignmentAlgorithm algorithm = new HeuristicAntiAlignmentAlgorithm(net, initialMarking,
 				finalMarking, xLog, alignments, mapping);
 
-		AntiAlignments aa = algorithm.computeAntiAlignments();
+		AntiAlignments aa = algorithm.computeAntiAlignments(progress);
 
 		AntiAlignmentValues values = algorithm.computePrecisionAndGeneralization(aa);
 

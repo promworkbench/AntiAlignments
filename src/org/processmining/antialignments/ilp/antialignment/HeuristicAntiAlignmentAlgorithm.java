@@ -15,12 +15,14 @@ import java.util.Vector;
 import nl.tue.astar.util.LPMatrix.LPMatrixException;
 
 import org.deckfour.xes.classification.XEventClass;
+import org.deckfour.xes.extension.std.XConceptExtension;
 import org.deckfour.xes.model.XLog;
 import org.processmining.antialignments.bruteforce.BreadthFirstTraceSearch;
 import org.processmining.antialignments.ilp.AntiAlignmentILPCalculator;
 import org.processmining.antialignments.ilp.util.AbstractHeuristicILPReplayer;
 import org.processmining.antialignments.ilp.util.AlignedRepresentative;
 import org.processmining.antialignments.ilp.util.AntiAlignments;
+import org.processmining.framework.plugin.Progress;
 import org.processmining.models.graphbased.directed.petrinet.Petrinet;
 import org.processmining.models.graphbased.directed.petrinet.elements.Transition;
 import org.processmining.models.semantics.IllegalTransitionException;
@@ -55,7 +57,12 @@ public class HeuristicAntiAlignmentAlgorithm extends AbstractHeuristicILPReplaye
 		// Build the aligned event log for anti-alignment computations
 	}
 
-	public AntiAlignments computeAntiAlignments() {
+	public AntiAlignments computeAntiAlignments(Progress progress) {
+
+		if (progress != null) {
+			progress.setMaximum(log.length + 2);
+		}
+
 		// Start anti-alignment computation
 		int maxFactor = 1;
 		int max = maxTraceLength * 2 * maxFactor;
@@ -64,12 +71,20 @@ public class HeuristicAntiAlignmentAlgorithm extends AbstractHeuristicILPReplaye
 		calculator2 = new AntiAlignmentILPCalculator(net, initialMarking, finalMarking, label2short, short2label,
 				mapping, log, max, maxFactor);
 
+		if (progress != null) {
+			if (progress.isCancelled()) {
+				return null;
+			}
+			progress.inc();
+
+		}
+
 		AntiAlignments aa;
 
 		long start = System.nanoTime();
 
 		try {
-			aa = calculator2.getAntiAlignments(initialMarking, finalMarking);
+			aa = calculator2.getAntiAlignments(progress, initialMarking, finalMarking);
 		} catch (LPMatrixException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -145,6 +160,8 @@ public class HeuristicAntiAlignmentAlgorithm extends AbstractHeuristicILPReplaye
 		res.addInfo(TRACEPRECISION, Double.toString(values.getTracePrecision()));
 		res.addInfo(TRACEGENERALIZATION, Double.toString(values.getTraceGeneralization()));
 		res.addInfo(PNRepResult.TRACEFITNESS, Double.toString(traceFitness));
+		res.addInfo(PNRepResult.VISTITLE, "Anti-Alignments for " + XConceptExtension.instance().extractName(xLog)
+				+ " and " + net.getLabel());
 
 		return res;
 	}

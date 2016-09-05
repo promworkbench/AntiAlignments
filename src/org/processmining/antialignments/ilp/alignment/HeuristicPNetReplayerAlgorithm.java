@@ -14,6 +14,7 @@ import nl.tue.astar.util.LPMatrix.LPMatrixException;
 import org.deckfour.xes.classification.XEventClass;
 import org.deckfour.xes.classification.XEventClasses;
 import org.deckfour.xes.classification.XEventClassifier;
+import org.deckfour.xes.extension.std.XConceptExtension;
 import org.deckfour.xes.info.XLogInfo;
 import org.deckfour.xes.info.XLogInfoFactory;
 import org.deckfour.xes.model.XLog;
@@ -40,6 +41,14 @@ import org.processmining.plugins.replayer.replayresult.SyncReplayResult;
 public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer<Petrinet> implements
 		IPNReplayAlgorithm {
 
+	private static final String CBOUND = "Column bound";
+	private static final String RBOUND = "Row bound";
+	private static final String SOLVER = "ILP Solver";
+	private static final String TIME = "Total time (ms)";
+	private static final String EXPECTEDMOVES = "User expected model moves";
+	private static final String CUTOFF = "Cutoff sequence length";
+	private static final String MINEVENT = "Minimal events in cutoff sequence";
+
 	private Map<Transition, Integer> mapTrans2Cost;
 	private Map<XEventClass, Integer> mapEvClass2Cost;
 	private Map<Transition, Integer> mapSync2Cost;
@@ -56,12 +65,33 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 
 		AlignmentILPCalculator calculator = new AlignmentILPCalculator(this.net, initialMarking, finalMarking,
 				label2short, short2label, mapping, log, mapTrans2Cost, mapEvClass2Cost, mapSync2Cost);
-		calculator.setLPSolve();
+		calculator.VERBOSE = false;
+		calculator.NAMES = false;
+
+		boolean gurobi;
+		int cBound, rBound;
+		if (!calculator.setLPSolve()) {
+			if (!calculator.setGurobi()) {
+				// LpSolve is set
+				// Cannot set LpSolve either. Throw an exception
+				throw new AStarException(
+						"Gurobi and LpSolve are both not available. One of them is needed for this plugin.");
+			} else {
+				gurobi = true;
+				cBound = 3000;
+				rBound = 4000;
+			}
+		} else {
+			gurobi = false;
+			cBound = 1500;
+			rBound = 2000;
+		}
 
 		// estimate the number of columns
 		int cutOffEvent = 1;
 		int minEvent = 0;
 
+		// Set parameters just over the bounds for the ILP's
 		int columns, rows;
 		do {
 			cutOffEvent += expectedModelMoves;
@@ -71,8 +101,10 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 					+ label2short.size();
 			rows = (net.getPlaces().size() + 2 * minEvent) * cutOffEvent + net.getPlaces().size() + label2short.size();
 
-		} while (columns < 500 && rows < 800);
-		while ((columns > 2000 || rows > 3000) && cutOffEvent > 5) {
+		} while (columns < cBound && rows < rBound);
+
+		// Make the problem smaller if it goes over the bound by more than 20%
+		while ((columns > 1.2 * cBound || rows > 1.2 * rBound) && cutOffEvent > 5) {
 			cutOffEvent = Math.max(cutOffEvent / 2, 5);
 			minEvent = Math.max(minEvent / 2, 1);
 			// estimate number of columns and rows (This is not exact!)
@@ -84,13 +116,15 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 
 		context.log("Starting replay with " + cutOffEvent + " exact variables containing at least " + minEvent
 				+ " labeled moves.");
+		context.log("Estimated ILP size: " + columns + " columns and " + rows + " rows.");
 
+		long startWhole = System.currentTimeMillis();
 		double minCost;
 		try {
 			calculator.setCutOffLength(cutOffEvent);
 			calculator.setMinEvents(0);
 			context.log("Starting replay on the empty trace with " + cutOffEvent + " exact variables.");
-			TIntList moves = calculator.getAlignmentWithoutTrace(initialMarking, finalMarking);
+			TIntList moves = calculator.getAlignmentWithoutTrace(context.getProgress(), initialMarking, finalMarking);
 			minCost = calculator.getCost(moves, new short[0]);
 		} catch (LPMatrixException _) {
 			minCost = 0.0;
@@ -100,16 +134,18 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 		List<SyncReplayResult> results = new ArrayList<>(log.length);
 		for (int tr = 0; tr < log.length && !context.getProgress().isCancelled(); tr++) {
 			try {
-				// TODO: COmpute expected Cutofflength and minEvents
 				calculator.setMinEvents(Math.min(minEvent, log[tr].length));
 				calculator.setCutOffLength(calculator.getMinEvents() * (expectedModelMoves + 1));
-				calculator.NAMES = false;
-				calculator.NAMES = false;
-				context.log("Starting replay with " + cutOffEvent + " exact variables containing at least " + minEvent
-						+ " labeled moves.");
+
+				calculator.setGurobi();
+				calculator.setMinEvents(5);
+				calculator.setCutOffLength(20);
+
+				context.log("Starting replay of trace " + tr + "/" + log.length + " with " + cutOffEvent
+						+ " exact variables containing at least " + minEvent + " labeled moves.");
 
 				long start = System.currentTimeMillis();
-				TIntList moves = calculator.getAlignment(initialMarking, finalMarking, tr);
+				TIntList moves = calculator.getAlignment(context.getProgress(), initialMarking, finalMarking, tr);
 				boolean reliable = calculator.checkAndReorderFiringSequence(moves, initialMarking, finalMarking, true);
 				long end = System.currentTimeMillis();
 
@@ -128,8 +164,21 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 			context.getProgress().inc();
 
 		}
+		long endWhole = System.currentTimeMillis();
 
 		PNRepResult result = new PNRepResult(results);
+
+		result.addInfo(CBOUND, Integer.toString(cBound));
+		result.addInfo(RBOUND, Integer.toString(rBound));
+		result.addInfo(SOLVER, gurobi ? "Gurobi" : "LpSolve");
+		result.addInfo(TIME, Integer.toString((int) (endWhole - startWhole)));
+		result.addInfo(EXPECTEDMOVES, Integer.toString(expectedModelMoves));
+		result.addInfo(CUTOFF, Integer.toString(cutOffEvent));
+		result.addInfo(MINEVENT, Integer.toString(minEvent));
+		result.addInfo(
+				PNRepResult.VISTITLE,
+ "Heuristic Alignments of "
+				+ XConceptExtension.instance().extractName(xLog) + " on " + net.getLabel());
 
 		return result;
 	}

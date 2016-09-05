@@ -9,6 +9,8 @@ import gnu.trove.map.hash.TObjectShortHashMap;
 import gurobi.GRB;
 import gurobi.GRBEnv;
 import gurobi.GRBException;
+import lpsolve.LpSolve;
+import lpsolve.LpSolveException;
 import nl.tue.astar.util.LPMatrix;
 
 import org.deckfour.xes.classification.XEventClass;
@@ -252,12 +254,25 @@ public abstract class AbstractILPCalculator {
 		this.cutOffLength = cutOffLength;
 	}
 
-	public void setLPSolve() {
-		this.mode = MODE_LPSOLVE;
+	public boolean setLPSolve() {
+		try {
+			mode = MODE_LPSOLVE;
+			LpSolve.makeLp(1, 1).deleteLp();
+			return true;
+		} catch (LpSolveException | UnsatisfiedLinkError | NoClassDefFoundError _) {
+			return false;
+		}
 	}
 
-	public void setGurobi() {
-		this.mode = MODE_GUROBI;
+	public boolean setGurobi() {
+		try {
+			gbEnv = new GRBEnv();
+			gbEnv.set(GRB.IntParam.OutputFlag, 0);
+			mode = MODE_GUROBI;
+			return true;
+		} catch (GRBException | UnsatisfiedLinkError | NoClassDefFoundError _) {
+			mode = MODE_LPSOLVE;
+			return false;
+		}
 	}
-
 }
