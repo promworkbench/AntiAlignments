@@ -71,7 +71,16 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 					+ label2short.size();
 			rows = (net.getPlaces().size() + 2 * minEvent) * cutOffEvent + net.getPlaces().size() + label2short.size();
 
-		} while (false && columns < 1000 && rows < 1500);
+		} while (columns < 500 && rows < 800);
+		while ((columns > 2000 || rows > 3000) && cutOffEvent > 5) {
+			cutOffEvent = Math.max(cutOffEvent / 2, 5);
+			minEvent = Math.max(minEvent / 2, 1);
+			// estimate number of columns and rows (This is not exact!)
+			columns = (net.getTransitions().size() + 2 * minEvent) * cutOffEvent + 2 * net.getTransitions().size()
+					+ label2short.size();
+			rows = (net.getPlaces().size() + 2 * minEvent) * cutOffEvent + net.getPlaces().size() + label2short.size();
+
+		}
 
 		context.log("Starting replay with " + cutOffEvent + " exact variables containing at least " + minEvent
 				+ " labeled moves.");
@@ -94,13 +103,14 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 				// TODO: COmpute expected Cutofflength and minEvents
 				calculator.setMinEvents(Math.min(minEvent, log[tr].length));
 				calculator.setCutOffLength(calculator.getMinEvents() * (expectedModelMoves + 1));
-				calculator.NAMES = true;
+				calculator.NAMES = false;
+				calculator.NAMES = false;
 				context.log("Starting replay with " + cutOffEvent + " exact variables containing at least " + minEvent
 						+ " labeled moves.");
 
 				long start = System.currentTimeMillis();
 				TIntList moves = calculator.getAlignment(initialMarking, finalMarking, tr);
-				boolean reliable = calculator.checkFiringSequence(moves, initialMarking, finalMarking);
+				boolean reliable = calculator.checkAndReorderFiringSequence(moves, initialMarking, finalMarking, true);
 				long end = System.currentTimeMillis();
 
 				Representative rep = log2xLog[tr];

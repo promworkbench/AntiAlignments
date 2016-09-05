@@ -105,14 +105,12 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 
 	public TIntList getAlignment(Marking initialMarking, Marking finalMarking, int trace) throws LPMatrixException {
 
-		VERBOSE = true;
 		return solveSequential(initialMarking, finalMarking, log[trace]);
 
 	}
 
 	public TIntList getAlignmentWithoutTrace(Marking initialMarking, Marking finalMarking) throws LPMatrixException {
 
-		VERBOSE = true;
 		return solveSequential(initialMarking, finalMarking, new short[0]);
 
 	}
@@ -715,7 +713,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 						try {
 							writer.write(cutOffLength + ";" + minEvents + ";" + traceToConsider + ";" + setup + ";"
 									+ solve + ";" + (end - start) + ";" + alignmentCosts + ";"
-									+ checkFiringSequence(moves, initialMarking, finalMarking) + ";"
+									+ checkAndReorderFiringSequence(moves, initialMarking, finalMarking, false) + ";"
 									+ checkTrace(moves, log[traceToConsider]) + "\r\n");
 							writer.flush();
 
@@ -856,7 +854,8 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 			printMoves(moves, trace);
 			//						assert checkFiringSequence(moves, initialMarking, finalMarking);
 			//						assert checkTrace(moves, log[traceToConsider]);
-			System.out.println("Is a firing sequence: " + checkFiringSequence(moves, initialMarking, finalMarking));
+			System.out.println("Is a firing sequence: "
+					+ checkAndReorderFiringSequence(moves, initialMarking, finalMarking, false));
 			System.out.println("Is the trace: " + checkTrace(moves, trace));
 			System.out.println("Alignment costs: " + alignmentCosts);
 			System.out.println("Setup time: " + setup);
@@ -971,21 +970,70 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 		return l;
 	}
 
-	public boolean checkFiringSequence(TIntList moves, Marking initialMarking, Marking finalMarking) {
+	public boolean checkAndReorderFiringSequence(TIntList moves, Marking initialMarking, Marking finalMarking,
+			boolean mergeMoves) {
 
 		PetrinetSemantics semantics = PetrinetSemanticsFactory.regularPetrinetSemantics(Petrinet.class);
 		semantics.initialize(net.getTransitions(), initialMarking);
 
+		short[] modelMoveStack = new short[moves.size()];
+		short[] modelMoveLocationStack = new short[moves.size()];
+		int mPos = -1;
+
+		short[] logMoveStack = new short[moves.size()];
+		short[] logMoveLocationStack = new short[moves.size()];
+		int lPos = -1;
+
 		boolean ok = true;
-		for (int t_i = 0; ok && t_i < moves.size(); t_i++) {
+		for (short t_i = 0; ok && t_i < moves.size(); t_i++) {
 			int move = moves.get(t_i);
+			short e = (short) (move & 0x0000FFFF);
 			short t = (short) (move >>> 16);
 			if (t == (short) NOMOVE) {
+				if (mPos >= 0 && modelMoveStack[mPos] == e) {
+					// last model move can be merged with this log move
+					int m = moves.get(modelMoveLocationStack[mPos]) & 0xFFFF0000;
+					m = m | (move & 0x0000FFFF);
+					moves.set(t_i, m);
+					moves.removeAt(modelMoveLocationStack[mPos]);
+					mPos--;
+					t_i--;
+				} else if (mergeMoves) {
+					// push on logMoveStack
+					lPos++;
+					logMoveStack[lPos] = e;
+					logMoveLocationStack[lPos] = t_i;
+				}
+				// logMove
 				continue;
+			}
+
+			// LogMove handled
+
+			if (e == (short) NOMOVE) {
+				if (lPos >= 0 && logMoveStack[lPos] == trans2label[t]) {
+					// there is a log move on the stack with this label
+					// merge them
+					int m = moves.get(logMoveLocationStack[lPos]) & 0x0000FFFF;
+					m = m | (move & 0xFFFF0000);
+					moves.set(t_i, m);
+					moves.removeAt(logMoveLocationStack[lPos]);
+					lPos--;
+					t_i--;
+
+				} else if (mergeMoves) {
+					mPos++;
+					modelMoveStack[mPos] = trans2label[t];
+					modelMoveLocationStack[mPos] = t_i;
+				}
+			} else {
+				// empty the modelmove stack
+				mPos = 0;
+				lPos = 0;
 			}
 			try {
 				semantics.executeExecutableTransition(short2trans[t]);
-			} catch (IllegalTransitionException e) {
+			} catch (IllegalTransitionException _) {
 				// so this transition was not enabled.
 				//				assert (t.isInvisible());
 				ok &= short2trans[t].isInvisible();
