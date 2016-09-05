@@ -1,15 +1,6 @@
 package org.processmining.antialignments.alignments;
 
-import gnu.trove.iterator.TObjectByteIterator;
 import gnu.trove.list.TIntList;
-import gnu.trove.list.TShortList;
-import gnu.trove.list.array.TIntArrayList;
-import gnu.trove.list.array.TShortArrayList;
-import gnu.trove.map.TObjectShortMap;
-import gnu.trove.map.TShortObjectMap;
-import gnu.trove.map.hash.TObjectByteHashMap;
-import gnu.trove.map.hash.TObjectShortHashMap;
-import gnu.trove.map.hash.TShortObjectHashMap;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -25,9 +16,9 @@ import org.deckfour.xes.classification.XEventClasses;
 import org.deckfour.xes.classification.XEventClassifier;
 import org.deckfour.xes.info.XLogInfo;
 import org.deckfour.xes.info.XLogInfoFactory;
-import org.deckfour.xes.model.XEvent;
 import org.deckfour.xes.model.XLog;
-import org.deckfour.xes.model.XTrace;
+import org.processmining.antialignments.base.AbstractHeuristicILPReplayer;
+import org.processmining.antialignments.base.Representative;
 import org.processmining.framework.plugin.PluginContext;
 import org.processmining.framework.plugin.annotations.KeepInProMCache;
 import org.processmining.framework.util.Pair;
@@ -48,143 +39,24 @@ import org.processmining.plugins.replayer.replayresult.SyncReplayResult;
 
 @KeepInProMCache
 @PNReplayAlgorithm
-public class HeuristicPNetReplayerAlgorithm implements IPNReplayAlgorithm {
+public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer<Petrinet> implements
+		IPNReplayAlgorithm {
 
 	private Map<Transition, Integer> mapTrans2Cost;
 	private Map<XEventClass, Integer> mapEvClass2Cost;
 	private Map<Transition, Integer> mapSync2Cost;
-	private Integer maxNumOfStates;
-	private Marking initialMarking;
-	private Marking finalMarking;
-	private boolean usePartialOrderEvents;
-	private XEventClassifier classifier;
-	private TShortObjectMap<XEventClass> short2label;
-	private TObjectShortMap<XEventClass> label2short;
-	private TransEvClassMapping mapping;
-	private XLog xLog;
-	private XEventClasses classes;
-	private Representative[] log2xLog;
-
-	private static class LookupMap extends TObjectByteHashMap<Representative> {
-
-		public LookupMap(int size) {
-			super(size);
-		}
-
-		public Representative getKeyIfPresent(Representative key) {
-			int i = index(key);
-			if (i == -1) {
-				return null;
-			} else {
-				return (Representative) _set[i];
-			}
-		}
-	}
-
-	private static class Representative {
-		private final int number;
-		private final TIntList represented = new TIntArrayList(10);
-		private final TShortList trace;
-
-		public Representative(TShortList trace, int number) {
-			this.trace = trace;
-			this.number = number;
-		}
-
-		public void addRepresentedTrace(int trace) {
-			represented.add(trace);
-		}
-
-		public TIntList getRepresented() {
-			return represented;
-		}
-
-		public TShortList getTrace() {
-			return trace;
-		}
-
-		public boolean equals(Object o) {
-			return o != null && (o instanceof Representative ? ((Representative) o).trace.equals(trace) : false);
-		}
-
-		public int hashCode() {
-			return trace.hashCode();
-		}
-
-		public String toString() {
-			return trace.toString() + " representing " + represented.toString();
-		}
-
-		public int getNumber() {
-			return number;
-		}
-	}
 
 	public PNRepResult replayLog(PluginContext context, PetrinetGraph net, XLog xLog, TransEvClassMapping mapping,
 			IPNReplayParameter parameters) throws AStarException {
 
 		context.getProgress().setMaximum(xLog.size() + 1);
-		this.xLog = xLog;
-
-		this.mapping = mapping;
 		importParameters((CostBasedCompleteParam) parameters);
-		classifier = mapping.getEventClassifier();
-		final XLogInfo summary = XLogInfoFactory.createLogInfo(xLog, classifier);
-		this.classes = summary.getEventClasses();
 
-		LookupMap tempLog = new LookupMap(xLog.size());
-		short2label = new TShortObjectHashMap<>(net.getTransitions().size(), 0.7f, (short) -1);
-		label2short = new TObjectShortHashMap<>(net.getTransitions().size(), 0.7f, (short) -1);
+		setUpDataStructures((Petrinet) net, parameters.getInitialMarking(),
+				((CostBasedCompleteParam) parameters).getFinalMarkings()[0], xLog, mapping);
 
-		short c = 0;
-		int number = 0;
-		for (int t = 0; t < xLog.size(); t++) {
-			XTrace trace = xLog.get(t);
-			TShortList list = new TShortArrayList(trace.size());
-			for (XEvent event : trace) {
-				XEventClass clazz = classes.getClassOf(event);
-				short id = label2short.putIfAbsent(clazz, c);
-				if (id == label2short.getNoEntryValue()) {
-					short2label.put(c, clazz);
-					id = c;
-					c++;
-				}
-				list.add(id);
-			}
-			Representative rep = new Representative(list, number);
-			Representative existing = tempLog.getKeyIfPresent(rep);
-			if (null == existing) {
-				tempLog.put(rep, (byte) 1);
-				number++;
-			} else {
-				rep = existing;
-			}
-			rep.addRepresentedTrace(t);
-		}
-
-		for (Transition t : net.getTransitions()) {
-			XEventClass clazz = mapping.get(t);
-			short id = label2short.putIfAbsent(clazz, c);
-			if (id == label2short.getNoEntryValue()) {
-				short2label.put(c, clazz);
-				id = c;
-				c++;
-			}
-		}
-
-		int t = 0;
-		short[][] log = new short[tempLog.size()][];
-		log2xLog = new Representative[tempLog.size()];
-		TObjectByteIterator<Representative> it = tempLog.iterator();
-		while (it.hasNext()) {
-			it.advance();
-			log[it.key().getNumber()] = it.key().getTrace().toArray();
-			log2xLog[it.key().getNumber()] = it.key();
-			t++;
-		}
-
-		AlignmentILPCalculator calculator = new AlignmentILPCalculator(net, initialMarking, finalMarking, label2short,
-				short2label, mapping, log, mapTrans2Cost, mapEvClass2Cost, mapSync2Cost);
+		AlignmentILPCalculator calculator = new AlignmentILPCalculator(this.net, initialMarking, finalMarking,
+				label2short, short2label, mapping, log, mapTrans2Cost, mapEvClass2Cost, mapSync2Cost);
 		calculator.setLPSolve();
 		//		try {
 		//						calculator.doExperiment(initialMarking, finalMarking);
@@ -414,12 +286,10 @@ public class HeuristicPNetReplayerAlgorithm implements IPNReplayAlgorithm {
 	protected void importParameters(CostBasedCompleteParam parameters) {
 		// replay parameters
 		mapTrans2Cost = parameters.getMapTrans2Cost();
-		maxNumOfStates = parameters.getMaxNumOfStates();
+		//		maxNumOfStates = parameters.getMaxNumOfStates();
 		mapEvClass2Cost = parameters.getMapEvClass2Cost();
 		mapSync2Cost = parameters.getMapSync2Cost();
-		initialMarking = parameters.getInitialMarking();
-		finalMarking = parameters.getFinalMarkings()[0];
-		usePartialOrderEvents = parameters.isPartiallyOrderedEvents();
+		//		usePartialOrderEvents = parameters.isPartiallyOrderedEvents();
 
 	}
 

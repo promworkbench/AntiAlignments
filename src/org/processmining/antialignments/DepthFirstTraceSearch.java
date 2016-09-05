@@ -151,7 +151,7 @@ public class DepthFirstTraceSearch {
 	public AntiAlignments getAntiAlignments(final short[][] log, final int maxLength, final double maxFactor,
 			final DistanceMetric metric) {
 
-		final AntiAlignments antiAlignments = new AntiAlignments(log.length);
+		final AntiAlignments antiAlignments = new AntiAlignments(log.length, maxLength, maxFactor);
 
 		Arrays.fill(antiAlignments.getMaxDistances(), Integer.MAX_VALUE);
 		for (int t = 0; t < log.length; t++) {

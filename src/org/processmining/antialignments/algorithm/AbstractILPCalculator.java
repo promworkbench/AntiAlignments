@@ -119,7 +119,7 @@ public abstract class AbstractILPCalculator {
 			gbEnv = new GRBEnv();
 			gbEnv.set(GRB.IntParam.OutputFlag, 0);
 			mode = MODE_GUROBI;
-		} catch (GRBException _) {
+		} catch (GRBException | UnsatisfiedLinkError | NoClassDefFoundError _) {
 			mode = MODE_LPSOLVE;
 		}
 

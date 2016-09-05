@@ -20,7 +20,6 @@ import org.deckfour.xes.classification.XEventClass;
 import org.processmining.antialignments.algorithm.AbstractILPCalculator;
 import org.processmining.framework.util.Pair;
 import org.processmining.models.graphbased.directed.petrinet.Petrinet;
-import org.processmining.models.graphbased.directed.petrinet.PetrinetGraph;
 import org.processmining.models.graphbased.directed.petrinet.elements.Place;
 import org.processmining.models.graphbased.directed.petrinet.elements.Transition;
 import org.processmining.models.semantics.IllegalTransitionException;
@@ -75,7 +74,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 
 	private final int[] syncMoveCost;
 
-	public AlignmentILPCalculator(PetrinetGraph net, Marking initialMarking, Marking finalMarking,
+	public AlignmentILPCalculator(Petrinet net, Marking initialMarking, Marking finalMarking,
 			TObjectShortMap<XEventClass> label2short, TShortObjectMap<XEventClass> short2label,
 			TransEvClassMapping mapping, short[][] log, Map<Transition, Integer> mapTrans2Cost,
 			Map<XEventClass, Integer> mapEvClass2Cost, Map<Transition, Integer> mapSync2Cost) {

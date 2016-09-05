@@ -59,7 +59,7 @@ public class AntiAlignmentCalculator {
 			place2short.put(p, i++);
 		}
 
-		final AntiAlignments antiAlignments = new AntiAlignments(log.length);
+		final AntiAlignments antiAlignments = new AntiAlignments(log.length, maxLength * maxFactor, maxFactor);
 
 		for (int traceToIgnore = log.length; traceToIgnore >= 0; traceToIgnore--) {
 			int length = traceToIgnore < log.length ? log[traceToIgnore].length * maxFactor : maxLength * maxFactor;

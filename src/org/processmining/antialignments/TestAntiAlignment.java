@@ -12,6 +12,7 @@ import java.util.Iterator;
 import java.util.Set;
 
 import org.deckfour.xes.model.XLog;
+import org.processmining.antialignments.algorithm.AbstractILPCalculator;
 import org.processmining.antialignments.pathfinder.AntiAlignments;
 import org.processmining.log.utils.XLogBuilder;
 import org.processmining.models.graphbased.directed.petrinet.Petrinet;
@@ -21,6 +22,7 @@ import org.processmining.models.graphbased.directed.petrinet.impl.PetrinetFactor
 import org.processmining.models.semantics.petrinet.Marking;
 import org.processmining.plugins.petrinet.importing.tpn.TpnImport;
 import org.processmining.plugins.petrinet.importing.tpn.TpnParser;
+import org.processmining.plugins.petrinet.replayresult.PNRepResult;
 
 public class TestAntiAlignment {
 
@@ -40,6 +42,7 @@ public class TestAntiAlignment {
 	private static final String FREQUENCYATTRIBUTE = "Frequency";
 
 	public static void main(String[] args) throws IOException {
+		AbstractILPCalculator.NAMES = true;
 
 		// String path =
 		// "D:\\Documents\\Dropbox\\Boudewijn Werk\\Research\\Papers\\"
@@ -129,24 +132,11 @@ public class TestAntiAlignment {
 		//		new XesXmlGZIPSerializer().serialize(xLog, out);
 		//		out.close();
 
-		AntiAlignmentValues result = AntiAlignmentPlugin.basicCodeStructureWithoutAlignments(markedNet.net,
+		PNRepResult result = AntiAlignmentPlugin.basicCodeStructureWithoutAlignments(markedNet.net,
 				markedNet.initialMarking, markedNet.finalMarking, xLog);
 
 		if (!verbose) {
-			System.out.print(result.getFitness());
-			System.out.print("\t");
-			System.out.print(result.getTracePrecision());
-			System.out.print("\t");
-			System.out.print(result.getLogPrecision());
-			System.out.print("\t");
-			System.out.print(result.getPrecision());
-			System.out.print("\t");
-			System.out.print(result.getTraceGeneralization());
-			System.out.print("\t");
-			System.out.print(result.getLogGeneralization());
-			System.out.print("\t");
-			System.out.print(result.getGeneralization());
-			System.out.println();
+			System.out.println(result.getInfo());
 		}
 
 		//		int[] frequencies = new int[xLog.size()];

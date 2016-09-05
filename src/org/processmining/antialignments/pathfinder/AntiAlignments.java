@@ -12,14 +12,20 @@ public class AntiAlignments {
 	private final short[][] antiAlignments;
 	private final Vector<?>[] traces;
 	private final double[] maxDistances;
+	private final int[] times;
+	private int max;
+	private double maxFactor;
 
-	public AntiAlignments(int logLength) {
+	public AntiAlignments(int logLength, int max, double maxFactor) {
+		this.max = max;
+		this.maxFactor = maxFactor;
 		maxMinDistances = new double[logLength + 1];
 		Arrays.fill(getMaxMinDistances(), -1);
 		traceDistances = new int[logLength];
 		antiAlignments = new short[logLength + 1][];
 		traces = new Vector<?>[logLength + 1];
 		maxDistances = new double[logLength + 1];
+		times = new int[logLength + 1];
 	}
 
 	public int getLogLength() {
@@ -80,6 +86,26 @@ public class AntiAlignments {
 
 	public int[] getTraceDistances() {
 		return traceDistances;
+	}
+
+	public int getMaxAntiAlignmentLength() {
+		return max;
+	}
+
+	public double getMaxFactorForTraces() {
+		return maxFactor;
+	}
+
+	public int[] getTimes() {
+		return times;
+	}
+
+	public double getTimeForLog() {
+		return times[times.length - 1] / 1000.0;
+	}
+
+	public double getTimeForTrace(int trace) {
+		return times[trace] / 1000.0;
 	}
 
 }
