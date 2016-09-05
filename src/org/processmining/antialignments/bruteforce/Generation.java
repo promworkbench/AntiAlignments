@@ -1,4 +1,4 @@
-package org.processmining.antialignments.algorithm;
+package org.processmining.antialignments.bruteforce;
 
 import java.util.Iterator;
 

@@ -1,4 +1,4 @@
-package org.processmining.antialignments.algorithm;
+package org.processmining.antialignments.ilp;
 
 import gnu.trove.list.TShortList;
 import gnu.trove.list.array.TShortArrayList;
@@ -17,8 +17,8 @@ import nl.tue.astar.util.LPMatrix;
 import nl.tue.astar.util.LPMatrix.LPMatrixException;
 
 import org.deckfour.xes.classification.XEventClass;
-import org.processmining.antialignments.algorithm.ilp.HybridEquationResult;
-import org.processmining.antialignments.pathfinder.AntiAlignments;
+import org.processmining.antialignments.ilp.util.AntiAlignments;
+import org.processmining.antialignments.ilp.util.HybridEquationResult;
 import org.processmining.models.graphbased.directed.petrinet.Petrinet;
 import org.processmining.models.graphbased.directed.petrinet.PetrinetEdge;
 import org.processmining.models.graphbased.directed.petrinet.PetrinetNode;

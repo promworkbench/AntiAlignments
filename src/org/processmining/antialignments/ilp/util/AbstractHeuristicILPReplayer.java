@@ -1,4 +1,4 @@
-package org.processmining.antialignments.base;
+package org.processmining.antialignments.ilp.util;
 
 import gnu.trove.iterator.TObjectByteIterator;
 import gnu.trove.list.TShortList;

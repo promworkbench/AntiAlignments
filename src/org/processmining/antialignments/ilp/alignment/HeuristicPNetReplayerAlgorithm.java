@@ -1,4 +1,4 @@
-package org.processmining.antialignments.alignments;
+package org.processmining.antialignments.ilp.alignment;
 
 import gnu.trove.list.TIntList;
 
@@ -17,8 +17,8 @@ import org.deckfour.xes.classification.XEventClassifier;
 import org.deckfour.xes.info.XLogInfo;
 import org.deckfour.xes.info.XLogInfoFactory;
 import org.deckfour.xes.model.XLog;
-import org.processmining.antialignments.base.AbstractHeuristicILPReplayer;
-import org.processmining.antialignments.base.Representative;
+import org.processmining.antialignments.ilp.util.AbstractHeuristicILPReplayer;
+import org.processmining.antialignments.ilp.util.Representative;
 import org.processmining.framework.plugin.PluginContext;
 import org.processmining.framework.plugin.annotations.KeepInProMCache;
 import org.processmining.framework.util.Pair;

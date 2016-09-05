@@ -1,4 +1,4 @@
-package org.processmining.antialignments.algorithm.ilp;
+package org.processmining.antialignments.ilp.util;
 
 import gnu.trove.list.TShortList;
 

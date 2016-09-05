@@ -1,4 +1,4 @@
-package org.processmining.antialignments;
+package org.processmining.antialignments.ilp.antialignment;
 
 import java.text.NumberFormat;
 

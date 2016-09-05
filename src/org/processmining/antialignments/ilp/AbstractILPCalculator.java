@@ -1,4 +1,4 @@
-package org.processmining.antialignments.algorithm;
+package org.processmining.antialignments.ilp;
 
 import gnu.trove.iterator.TIntShortIterator;
 import gnu.trove.map.TIntShortMap;

@@ -1,4 +1,4 @@
-package org.processmining.antialignments;
+package org.processmining.antialignments.bruteforce;
 
 import gnu.trove.set.TShortSet;
 

@@ -4,7 +4,9 @@ import nl.tue.astar.AStarException;
 
 import org.deckfour.xes.extension.std.XConceptExtension;
 import org.deckfour.xes.model.XLog;
-import org.processmining.antialignments.pathfinder.AntiAlignments;
+import org.processmining.antialignments.ilp.antialignment.AntiAlignmentValues;
+import org.processmining.antialignments.ilp.antialignment.HeuristicAntiAlignmentAlgorithm;
+import org.processmining.antialignments.ilp.util.AntiAlignments;
 import org.processmining.contexts.uitopia.UIPluginContext;
 import org.processmining.contexts.uitopia.annotations.UITopiaVariant;
 import org.processmining.framework.connections.ConnectionCannotBeObtained;
@@ -92,22 +94,8 @@ public class AntiAlignmentPlugin {
 		return null;
 	}
 
-	public static PNRepResult basicCodeStructureWithoutAlignments(Petrinet net, Marking initialMarking,
-			Marking finalMarking, XLog xLog) {
-
-		// Setup the alignmentAlgorithm
-		AlignmentSetup alignmentAlgorithm = new AlignmentSetup(net, xLog);
-
-		// Compute Alignments
-		PNRepResult alignments = alignmentAlgorithm.getAlignment(initialMarking, finalMarking, false);
-
-		return basicCodeStructureWithAlignments(net, initialMarking, finalMarking, xLog, alignments,
-				alignmentAlgorithm.mapping);
-
-	}
-
-	public static PNRepResult basicCodeStructureWithAlignments(Petrinet net, Marking initialMarking,
-			Marking finalMarking, XLog xLog, PNRepResult alignments, TransEvClassMapping mapping) {
+	public PNRepResult basicCodeStructureWithAlignments(Petrinet net, Marking initialMarking, Marking finalMarking,
+			XLog xLog, PNRepResult alignments, TransEvClassMapping mapping) {
 
 		HeuristicAntiAlignmentAlgorithm algorithm = new HeuristicAntiAlignmentAlgorithm(net, initialMarking,
 				finalMarking, xLog, alignments, mapping);

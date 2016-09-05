@@ -1,4 +1,4 @@
-package org.processmining.antialignments;
+package org.processmining.antialignments.bruteforce;
 
 import gnu.trove.map.TObjectShortMap;
 import gnu.trove.procedure.TObjectProcedure;
@@ -13,8 +13,8 @@ import java.util.Random;
 import java.util.Stack;
 import java.util.Vector;
 
-import org.processmining.antialignments.TestAntiAlignment.MarkedNet;
-import org.processmining.antialignments.pathfinder.AntiAlignments;
+import org.processmining.antialignments.ilp.util.AntiAlignments;
+import org.processmining.antialignments.test.TestAntiAlignment.MarkedNet;
 import org.processmining.models.graphbased.directed.petrinet.Petrinet;
 import org.processmining.models.graphbased.directed.petrinet.elements.Transition;
 import org.processmining.models.semantics.IllegalTransitionException;

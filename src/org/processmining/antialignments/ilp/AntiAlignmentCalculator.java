@@ -1,4 +1,4 @@
-package org.processmining.antialignments.algorithm;
+package org.processmining.antialignments.ilp;
 
 import gnu.trove.map.TObjectShortMap;
 import gnu.trove.map.hash.TObjectShortHashMap;
@@ -6,7 +6,9 @@ import gnu.trove.map.hash.TObjectShortHashMap;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.processmining.antialignments.pathfinder.AntiAlignments;
+import org.processmining.antialignments.bruteforce.EditDistanceState;
+import org.processmining.antialignments.bruteforce.State;
+import org.processmining.antialignments.ilp.util.AntiAlignments;
 import org.processmining.models.graphbased.directed.petrinet.Petrinet;
 import org.processmining.models.graphbased.directed.petrinet.elements.Place;
 import org.processmining.models.graphbased.directed.petrinet.elements.Transition;

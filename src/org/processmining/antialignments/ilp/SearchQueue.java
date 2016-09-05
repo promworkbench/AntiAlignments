@@ -1,10 +1,11 @@
-package org.processmining.antialignments.algorithm;
+package org.processmining.antialignments.ilp;
 
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
 
 import org.apache.commons.collections15.list.TreeList;
+import org.processmining.antialignments.bruteforce.State;
 
 /**
  * This class implements the search queue for an anti alignment.
@@ -269,7 +270,7 @@ public class SearchQueue<S extends State> implements Iterable<S> {
 		return state;
 	}
 
-	boolean isEmpty() {
+	public boolean isEmpty() {
 		return states.isEmpty();
 	}
 

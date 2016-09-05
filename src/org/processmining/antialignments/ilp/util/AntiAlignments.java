@@ -1,4 +1,4 @@
-package org.processmining.antialignments.pathfinder;
+package org.processmining.antialignments.ilp.util;
 
 import java.util.Arrays;
 import java.util.Vector;

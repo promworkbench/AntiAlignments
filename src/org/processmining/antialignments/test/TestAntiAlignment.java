@@ -1,4 +1,4 @@
-package org.processmining.antialignments;
+package org.processmining.antialignments.test;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedReader;
@@ -12,8 +12,10 @@ import java.util.Iterator;
 import java.util.Set;
 
 import org.deckfour.xes.model.XLog;
-import org.processmining.antialignments.algorithm.AbstractILPCalculator;
-import org.processmining.antialignments.pathfinder.AntiAlignments;
+import org.processmining.antialignments.AntiAlignmentPlugin;
+import org.processmining.antialignments.bruteforce.DistanceMetric;
+import org.processmining.antialignments.ilp.AbstractILPCalculator;
+import org.processmining.antialignments.ilp.util.AntiAlignments;
 import org.processmining.log.utils.XLogBuilder;
 import org.processmining.models.graphbased.directed.petrinet.Petrinet;
 import org.processmining.models.graphbased.directed.petrinet.elements.Place;
@@ -132,8 +134,8 @@ public class TestAntiAlignment {
 		//		new XesXmlGZIPSerializer().serialize(xLog, out);
 		//		out.close();
 
-		PNRepResult result = AntiAlignmentPlugin.basicCodeStructureWithoutAlignments(markedNet.net,
-				markedNet.initialMarking, markedNet.finalMarking, xLog);
+		PNRepResult result = basicCodeStructureWithoutAlignments(markedNet.net, markedNet.initialMarking,
+				markedNet.finalMarking, xLog);
 
 		if (!verbose) {
 			System.out.println(result.getInfo());
@@ -546,4 +548,17 @@ public class TestAntiAlignment {
 
 	}
 
+	public static PNRepResult basicCodeStructureWithoutAlignments(Petrinet net, Marking initialMarking,
+			Marking finalMarking, XLog xLog) {
+
+		// Setup the alignmentAlgorithm
+		AlignmentSetup alignmentAlgorithm = new AlignmentSetup(net, xLog);
+
+		// Compute Alignments
+		PNRepResult alignments = alignmentAlgorithm.getAlignment(initialMarking, finalMarking, false);
+
+		return new AntiAlignmentPlugin().basicCodeStructureWithAlignments(net, initialMarking, finalMarking, xLog,
+				alignments, alignmentAlgorithm.mapping);
+
+	}
 }

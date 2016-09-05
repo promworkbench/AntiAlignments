@@ -1,4 +1,4 @@
-package org.processmining.antialignments;
+package org.processmining.antialignments.ilp.antialignment;
 
 import gnu.trove.iterator.TIntIterator;
 import gnu.trove.map.TShortObjectMap;
@@ -16,10 +16,11 @@ import nl.tue.astar.util.LPMatrix.LPMatrixException;
 
 import org.deckfour.xes.classification.XEventClass;
 import org.deckfour.xes.model.XLog;
-import org.processmining.antialignments.algorithm.AntiAlignmentILPCalculator;
-import org.processmining.antialignments.base.AbstractHeuristicILPReplayer;
-import org.processmining.antialignments.base.AlignedRepresentative;
-import org.processmining.antialignments.pathfinder.AntiAlignments;
+import org.processmining.antialignments.bruteforce.BreadthFirstTraceSearch;
+import org.processmining.antialignments.ilp.AntiAlignmentILPCalculator;
+import org.processmining.antialignments.ilp.util.AbstractHeuristicILPReplayer;
+import org.processmining.antialignments.ilp.util.AlignedRepresentative;
+import org.processmining.antialignments.ilp.util.AntiAlignments;
 import org.processmining.models.graphbased.directed.petrinet.Petrinet;
 import org.processmining.models.graphbased.directed.petrinet.elements.Transition;
 import org.processmining.models.semantics.IllegalTransitionException;

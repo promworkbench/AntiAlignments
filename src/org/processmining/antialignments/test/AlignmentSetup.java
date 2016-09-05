@@ -1,4 +1,4 @@
-package org.processmining.antialignments;
+package org.processmining.antialignments.test;
 
 import java.util.HashMap;
 import java.util.Map;
