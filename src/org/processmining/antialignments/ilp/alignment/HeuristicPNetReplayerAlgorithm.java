@@ -58,21 +58,46 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 				label2short, short2label, mapping, log, mapTrans2Cost, mapEvClass2Cost, mapSync2Cost);
 		calculator.setLPSolve();
 
-		// TODO: COmpute expected Cutofflength and minEvents
-		calculator.setCutOffLength(7);
-		calculator.setMinEvents(2);
+		// estimate the number of columns
+		int cutOffEvent = 1;
+		int minEvent = 0;
+
+		int columns, rows;
+		do {
+			cutOffEvent += expectedModelMoves;
+			minEvent++;
+			// estimate number of columns and rows (This is not exact!)
+			columns = (net.getTransitions().size() + 2 * minEvent) * cutOffEvent + 2 * net.getTransitions().size()
+					+ label2short.size();
+			rows = (net.getPlaces().size() + 2 * minEvent) * cutOffEvent + net.getPlaces().size() + label2short.size();
+
+		} while (false && columns < 1000 && rows < 1500);
+
+		context.log("Starting replay with " + cutOffEvent + " exact variables containing at least " + minEvent
+				+ " labeled moves.");
+
 		double minCost;
 		try {
+			calculator.setCutOffLength(cutOffEvent);
+			calculator.setMinEvents(0);
+			context.log("Starting replay on the empty trace with " + cutOffEvent + " exact variables.");
 			TIntList moves = calculator.getAlignmentWithoutTrace(initialMarking, finalMarking);
 			minCost = calculator.getCost(moves, new short[0]);
-		} catch (LPMatrixException e) {
+		} catch (LPMatrixException _) {
 			minCost = 0.0;
 		}
 		context.getProgress().inc();
 
 		List<SyncReplayResult> results = new ArrayList<>(log.length);
-		for (int tr = 0; tr < log.length; tr++) {
+		for (int tr = 0; tr < log.length && !context.getProgress().isCancelled(); tr++) {
 			try {
+				// TODO: COmpute expected Cutofflength and minEvents
+				calculator.setMinEvents(Math.min(minEvent, log[tr].length));
+				calculator.setCutOffLength(calculator.getMinEvents() * (expectedModelMoves + 1));
+				calculator.NAMES = true;
+				context.log("Starting replay with " + cutOffEvent + " exact variables containing at least " + minEvent
+						+ " labeled moves.");
+
 				long start = System.currentTimeMillis();
 				TIntList moves = calculator.getAlignment(initialMarking, finalMarking, tr);
 				boolean reliable = calculator.checkFiringSequence(moves, initialMarking, finalMarking);
@@ -88,7 +113,7 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 				}
 
 				results.add(srr);
-			} catch (LPMatrixException e) {
+			} catch (LPMatrixException _) {
 			}
 			context.getProgress().inc();
 

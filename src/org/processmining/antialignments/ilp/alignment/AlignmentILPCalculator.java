@@ -227,7 +227,9 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 					matrixA.copyColumnIntoMatrix(syncTransitionMap[sm], lp, block * spRows, col);
 					// token flow on event
 					lp.setMat(firstEventRow + syncEventMap[sm], col, -1);
-					lp.setMat(firstEventRow + syncEventMap[sm] + 1, col, 1);
+					if (syncEventMap[sm] < synchronousTransitions - 1) {
+						lp.setMat(firstEventRow + syncEventMap[sm] + 1, col, 1);
+					}
 				}
 				// then the LogMove part
 				for (int e = 0; e < traceWindow.length; e++) {
@@ -249,9 +251,9 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 				lp.setObjective(col, getCostForModelMove(t) + (minEvent == 0 ? 0 : EPSILON));
 				if (trans2label[t] >= 0) {
 					lp.setMat(progressRow, col, 1);
-					lp.setBinary(col, integerVariables);
-					lp.setUpbo(col, 1);
 				}
+				lp.setBinary(col, integerVariables);
+				lp.setUpbo(col, 1);
 				lp.setMat(acRow, col, getCostForModelMove(t));
 				// Add labels
 				if (NAMES) {
@@ -274,11 +276,9 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 				// Set Objective
 				lp.setObjective(col, getCostForSync(syncTransitionMap[sm], syncLabelMap[sm]));
 				lp.setMat(acRow, col, getCostForSync(syncTransitionMap[sm], syncLabelMap[sm]));
-				if (trans2label[syncTransitionMap[sm]] >= 0) {
-					lp.setMat(progressRow, col, 1);
-					lp.setBinary(col, integerVariables);
-					lp.setUpbo(col, 1);
-				}
+				lp.setMat(progressRow, col, 1);
+				lp.setBinary(col, integerVariables);
+				lp.setUpbo(col, 1);
 
 				// Add labels
 				if (NAMES) {
@@ -328,8 +328,8 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 			// count progress
 			if (trans2label[t] >= 0) {
 				lp.setMat(progressRow, col, 1);
-				lp.setInt(col, integerVariables);
 			}
+			lp.setInt(col, integerVariables);
 			// Add labels
 			if (NAMES) {
 				lp.setColName(col, "cM" + t);
@@ -604,7 +604,9 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 				lp.setMat(row, t, 1);
 			}
 		}
-		lp.setRowName(row, "EVTS_" + minEvent);
+		if (NAMES) {
+			lp.setRowName(row, "EVTS_" + minEvent);
+		}
 		lp.setConstrType(row, LpSolve.GE);
 		row++;
 
@@ -613,7 +615,9 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 			for (int t = i * spCols + invisibleTransitions; t < (i + 1) * spCols; t++) {
 				lp.setMat(row + i, t, 1);
 			}
-			lp.setRowName(row + i, "X" + i + ".1");
+			if (NAMES) {
+				lp.setRowName(row + i, "X" + i + ".1");
+			}
 			lp.setConstrType(row + i, LpSolve.LE);
 		}
 
@@ -621,7 +625,9 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 		//		for (int t = 0; t < lp.getNcolumns(); t++) {
 		//			lp.setMat(row, t, 1);
 		//		}
-		lp.setRowName(progressRow, "SUM");
+		if (NAMES) {
+			lp.setRowName(progressRow, "SUM");
+		}
 		lp.setConstrType(progressRow, LPMatrix.GE);
 
 		lp.setMinim();
@@ -1053,8 +1059,10 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 
 	public void setMinEvents(int minEvents) {
 		this.minEvents = minEvents;
-		// TODO Auto-generated method stub
+	}
 
+	public int getMinEvents() {
+		return minEvents;
 	}
 
 }
