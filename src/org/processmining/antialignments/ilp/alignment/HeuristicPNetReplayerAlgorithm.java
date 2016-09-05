@@ -30,8 +30,6 @@ import org.processmining.plugins.connectionfactories.logpetrinet.TransEvClassMap
 import org.processmining.plugins.petrinet.replayer.algorithms.IPNReplayAlgorithm;
 import org.processmining.plugins.petrinet.replayer.algorithms.IPNReplayParamProvider;
 import org.processmining.plugins.petrinet.replayer.algorithms.IPNReplayParameter;
-import org.processmining.plugins.petrinet.replayer.algorithms.costbasedcomplete.CostBasedCompleteParam;
-import org.processmining.plugins.petrinet.replayer.algorithms.costbasedcomplete.CostBasedCompleteParamProvider;
 import org.processmining.plugins.petrinet.replayer.annotations.PNReplayAlgorithm;
 import org.processmining.plugins.petrinet.replayresult.PNRepResult;
 import org.processmining.plugins.petrinet.replayresult.StepTypes;
@@ -45,25 +43,22 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 	private Map<Transition, Integer> mapTrans2Cost;
 	private Map<XEventClass, Integer> mapEvClass2Cost;
 	private Map<Transition, Integer> mapSync2Cost;
+	private int expectedModelMoves;
 
 	public PNRepResult replayLog(PluginContext context, PetrinetGraph net, XLog xLog, TransEvClassMapping mapping,
 			IPNReplayParameter parameters) throws AStarException {
 
 		context.getProgress().setMaximum(xLog.size() + 1);
-		importParameters((CostBasedCompleteParam) parameters);
+		importParameters((HeuristicParameters) parameters);
 
 		setUpDataStructures((Petrinet) net, parameters.getInitialMarking(),
-				((CostBasedCompleteParam) parameters).getFinalMarkings()[0], xLog, mapping);
+				((HeuristicParameters) parameters).getFinalMarkings()[0], xLog, mapping);
 
 		AlignmentILPCalculator calculator = new AlignmentILPCalculator(this.net, initialMarking, finalMarking,
 				label2short, short2label, mapping, log, mapTrans2Cost, mapEvClass2Cost, mapSync2Cost);
 		calculator.setLPSolve();
-		//		try {
-		//						calculator.doExperiment(initialMarking, finalMarking);
-		//		} catch (LPMatrixException e) {
-		//			// TODO Auto-generated catch block
-		//			e.printStackTrace();
-		//		}
+
+		// TODO: COmpute expected Cutofflength and minEvents
 		calculator.setCutOffLength(7);
 		calculator.setMinEvents(2);
 		double minCost;
@@ -194,7 +189,7 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 
 	public IPNReplayParamProvider constructParamProvider(PluginContext context, PetrinetGraph net, XLog log,
 			TransEvClassMapping mapping) {
-		return new CostBasedCompleteParamProvider(context, net, log, mapping);
+		return new HeuristicParameterProvider(context, net, log, mapping);
 	}
 
 	/**
@@ -205,7 +200,7 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 
 		if (isReqWOParameterSatisfied(context, net, log, mapping)) {
 			if (isParameterReqCorrect(net, log, mapping, parameter)) {
-				Marking[] finalMarking = ((CostBasedCompleteParam) parameter).getFinalMarkings();
+				Marking[] finalMarking = ((HeuristicParameters) parameter).getFinalMarkings();
 				if ((finalMarking != null) && (finalMarking.length == 1)) {
 					return true;
 				}
@@ -243,14 +238,12 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 	 */
 	public boolean isParameterReqCorrect(PetrinetGraph net, XLog log, TransEvClassMapping mapping,
 			IPNReplayParameter parameter) {
-		if (parameter instanceof CostBasedCompleteParam) {
-			CostBasedCompleteParam param = (CostBasedCompleteParam) parameter;
-			if ((param.getMapTrans2Cost() != null) && (param.getMaxNumOfStates() != null)
-					&& (param.getMapEvClass2Cost() != null) && (param.getInitialMarking() != null)
-					&& (param.getFinalMarkings() != null)) {
+		if (parameter instanceof HeuristicParameters) {
+			HeuristicParameters param = (HeuristicParameters) parameter;
+			if ((param.getMapTrans2Cost() != null) && (param.getMapEvClass2Cost() != null)
+					&& (param.getInitialMarking() != null) && (param.getFinalMarkings() != null)) {
 				// check all transitions are indeed mapped to cost
-				if ((param.getMaxNumOfStates() >= 0)
-						&& (param.getMapTrans2Cost().keySet().containsAll(net.getTransitions()))) {
+				if ((param.getMapTrans2Cost().keySet().containsAll(net.getTransitions()))) {
 					Set<XEventClass> evClassWithCost = param.getMapEvClass2Cost().keySet();
 					// check all event classes are mapped to cost
 					XEventClassifier classifier = mapping.getEventClassifier();
@@ -283,14 +276,13 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 				+ " tokens in each place.";
 	}
 
-	protected void importParameters(CostBasedCompleteParam parameters) {
+	protected void importParameters(HeuristicParameters parameters) {
 		// replay parameters
 		mapTrans2Cost = parameters.getMapTrans2Cost();
 		//		maxNumOfStates = parameters.getMaxNumOfStates();
 		mapEvClass2Cost = parameters.getMapEvClass2Cost();
 		mapSync2Cost = parameters.getMapSync2Cost();
-		//		usePartialOrderEvents = parameters.isPartiallyOrderedEvents();
-
+		expectedModelMoves = parameters.getExpecteModelMoves();
 	}
 
 }
