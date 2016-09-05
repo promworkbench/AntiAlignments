@@ -1,5 +1,6 @@
 package org.processmining.antialignments;
 
+import gnu.trove.iterator.TIntIterator;
 import gnu.trove.map.TShortObjectMap;
 import gnu.trove.set.TShortSet;
 import gnu.trove.set.hash.TShortHashSet;
@@ -468,6 +469,10 @@ public class HeuristicAntiAlignmentAlgorithm extends AbstractHeuristicILPReplaye
 		if (trace >= 0 && trace < log.length) {
 			int xTrace = log2xLog[trace].getRepresented().get(0);
 			res = new SyncReplayResult(nodeInstance, stepTypes, xTrace);
+			TIntIterator it = log2xLog[trace].getRepresented().iterator();
+			while (it.hasNext()) {
+				res.getTraceIndex().add(it.next());
+			}
 
 			info.put(HAMMINGDISTANCETOLOG, antiAlignments.getAADistanceForLogWithoutTrace(trace));
 			info.put(HAMMINGDISTANCETOREMOVED, (double) antiAlignments.getAADistanceToTrace(trace));

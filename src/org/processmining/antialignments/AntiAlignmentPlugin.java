@@ -39,6 +39,8 @@ public class AntiAlignmentPlugin {
 			PNLogReplayer replayer = new PNLogReplayer();
 			alignments = replayer.replayLog(context, net, log);
 
+			context.getProvidedObjectManager().createProvidedObject("Petrinet log replay result", alignments, context);
+
 			return measurePrecision(context, net, log, alignments);
 
 		} catch (ConnectionCannotBeObtained e) {
