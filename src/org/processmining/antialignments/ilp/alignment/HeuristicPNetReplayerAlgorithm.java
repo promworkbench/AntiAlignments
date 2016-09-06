@@ -115,8 +115,8 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 		calculator.VERBOSE = false;
 		calculator.NAMES = false;
 		calculator.EPSILON = 0;
-		cutOffEvent = 3;
-		minEvent = 1;
+		//		cutOffEvent = 3;
+		//		minEvent = 1;
 
 		long startWhole = System.currentTimeMillis();
 		double minCost;
