@@ -900,10 +900,10 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 					int m = moves.get(modelMoveLocationStack[mPos]) & 0xFFFF0000;
 					m = m | (move & 0x0000FFFF);
 					moves.set(t_i, m);
-					//					if (VERBOSE) {
-					System.out.println("Moving model move: " + modelMoveLocationStack[mPos] + " forward. Merges with "
-							+ t_i + " Checked:" + checked);
-					//					}
+					if (VERBOSE) {
+						System.out.println("Moving model move: " + modelMoveLocationStack[mPos]
+								+ " forward. Merges with " + t_i + " Checked:" + checked);
+					}
 					moves.removeAt(modelMoveLocationStack[mPos]);
 					// checked--, since array was shortened by one
 					if (modelMoveLocationStack[mPos] <= checked) {
@@ -940,10 +940,10 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 					int m = moves.get(logMoveLocationStack[lPos]) & 0x0000FFFF;
 					m = m | (move & 0xFFFF0000);
 					moves.set(t_i, m);
-					//					if (VERBOSE) {
-					System.out.println("Moving log move: " + logMoveLocationStack[lPos] + " forward. Merges with "
-							+ t_i + " Checked:" + checked);
-					//					}
+					if (VERBOSE) {
+						System.out.println("Moving log move: " + logMoveLocationStack[lPos] + " forward. Merges with "
+								+ t_i + " Checked:" + checked);
+					}
 					moves.removeAt(logMoveLocationStack[lPos]);
 					if (checked >= t_i) {
 						checked--;
