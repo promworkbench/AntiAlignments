@@ -31,8 +31,6 @@ import org.processmining.plugins.connectionfactories.logpetrinet.TransEvClassMap
 
 public class AlignmentILPCalculator extends AbstractILPCalculator {
 
-	static double EPSILON = 0.001;
-
 	private static final int NOMOVE = 0x0000FFFF;
 
 	// number of columns in synchronous product matrix
@@ -250,7 +248,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 			for (short t = 0; t < transitions; t++) {
 				int col = block * spCols + t;
 				// Set Objective
-				lp.setObjective(col, getCostForModelMove(t) + (minEvent == 0 ? 0 : EPSILON));
+				lp.setObjective(col, getCostForModelMove(t));
 				lp.setMat(progressRow, col, 1);
 
 				lp.setBinary(col, integerVariables);
@@ -326,7 +324,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 			if (t < invisibleTransitions) {
 				lp.setObjective(col, getCostForModelMove(t) + 0.001);
 			} else {
-				lp.setObjective(col, getCostForModelMove(t) + (minEvent == 0 ? EPSILON : 0));
+				lp.setObjective(col, getCostForModelMove(t));
 			}
 
 			lp.setMat(acRow, col, getCostForModelMove(t));
@@ -347,7 +345,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 		for (short t = invisibleTransitions; t < transitions; t++) {
 			int col = maxLengthX * spCols + transitions - invisibleTransitions + t;
 			// Set Objective
-			lp.setObjective(col, getCostForSync(t, trans2label[t]) + 2 * EPSILON);
+			lp.setObjective(col, getCostForSync(t, trans2label[t]));
 			lp.setMat(acRow, col, getCostForSync(t, trans2label[t]));
 
 			// count progress
@@ -374,7 +372,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 			lp.setMat(row, col, 1);
 
 			// Set Objective
-			lp.setObjective(col, getCostForLogMove(l) + EPSILON);
+			lp.setObjective(col, getCostForLogMove(l));
 			lp.setMat(acRow, col, getCostForLogMove(l));
 
 			// count progress
@@ -902,12 +900,20 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 					int m = moves.get(modelMoveLocationStack[mPos]) & 0xFFFF0000;
 					m = m | (move & 0x0000FFFF);
 					moves.set(t_i, m);
+					//					if (VERBOSE) {
 					System.out.println("Moving model move: " + modelMoveLocationStack[mPos] + " forward. Merges with "
 							+ t_i + " Checked:" + checked);
+					//					}
 					moves.removeAt(modelMoveLocationStack[mPos]);
 					// checked--, since array was shortened by one
 					if (modelMoveLocationStack[mPos] <= checked) {
-						checked = t_i - 1;
+						if (checked <= t_i - 1) {
+							// Set checked to the new location
+							checked = t_i - 1;
+						} else {
+							// we remove one element
+							checked--;
+						}
 					}
 					// t-- means: go to next move
 					// t -=2 means: process this move again
@@ -934,10 +940,14 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 					int m = moves.get(logMoveLocationStack[lPos]) & 0x0000FFFF;
 					m = m | (move & 0xFFFF0000);
 					moves.set(t_i, m);
+					//					if (VERBOSE) {
 					System.out.println("Moving log move: " + logMoveLocationStack[lPos] + " forward. Merges with "
 							+ t_i + " Checked:" + checked);
+					//					}
 					moves.removeAt(logMoveLocationStack[lPos]);
-					checked = logMoveLocationStack[lPos] - 1;
+					if (checked >= t_i) {
+						checked--;
+					}
 
 					lPos--;
 					t_i -= 3;

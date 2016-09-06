@@ -77,25 +77,25 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 		int rBound = 800;
 
 		// Set parameters just over the bounds for the ILP's
-		int cutOffEvent = expectedModelMoves;
+		int cutOffEvent = expectedModelMoves + 1;
 		int minEvent = 1;
 		// estimate number of columns and rows (This is not exact!)
 		int columns = (net.getTransitions().size() + 2 * minEvent) * cutOffEvent + 2 * net.getTransitions().size()
 				+ label2short.size();
 		int rows = (net.getPlaces().size() + 2 * minEvent) * cutOffEvent + net.getPlaces().size() + label2short.size();
 
-		// the estimated minimum number of rows and colums are known.
-		while (rows < rBound && columns < cBound) {
-			// Try to increase without loosing too much CPU time in LpSolve
-			cutOffEvent += expectedModelMoves;
-			minEvent++;
-			columns = (net.getTransitions().size() + 2 * minEvent) * cutOffEvent + 2 * net.getTransitions().size()
-					+ label2short.size();
-			rows = (net.getPlaces().size() + 2 * minEvent) * cutOffEvent + net.getPlaces().size() + label2short.size();
-		}
+		//		// the estimated minimum number of rows and colums are known.
+		//		while (rows < rBound && columns < cBound) {
+		//			// Try to increase without loosing too much CPU time in LpSolve
+		//			cutOffEvent += expectedModelMoves;
+		//			minEvent++;
+		//			columns = (net.getTransitions().size() + 2 * minEvent) * cutOffEvent + 2 * net.getTransitions().size()
+		//					+ label2short.size();
+		//			rows = (net.getPlaces().size() + 2 * minEvent) * cutOffEvent + net.getPlaces().size() + label2short.size();
+		//		}
 
 		// But what if that fails?
-		if (columns > 2000 || rows > 2000) {
+		if (columns > cBound || rows > rBound) {
 			// Try to setup Gurobi?
 			if (calculator.setGurobi()) {
 				gurobi = true;
@@ -112,12 +112,6 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 		context.log("Starting replay with " + cutOffEvent + " exact variables containing at least " + minEvent
 				+ " labeled moves.");
 		context.log("Estimated ILP size: " + columns + " columns and " + rows + " rows.");
-
-		calculator.VERBOSE = false;
-		calculator.NAMES = false;
-		calculator.EPSILON = 0;
-		//		cutOffEvent = 3;
-		//		minEvent = 1;
 
 		long startWhole = System.currentTimeMillis();
 		double minCost;
@@ -149,6 +143,7 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 				TIntList moves = calculator.getAlignment(context.getProgress(), initialMarking, finalMarking, tr);
 				//				calculator.printMoves(moves, log[tr]);
 				boolean reliable = calculator.checkAndReorderFiringSequence(moves, initialMarking, finalMarking, true);
+				reliable &= calculator.checkTrace(moves, log[tr], true);
 				long end = System.currentTimeMillis();
 
 				Representative rep = log2xLog[tr];
