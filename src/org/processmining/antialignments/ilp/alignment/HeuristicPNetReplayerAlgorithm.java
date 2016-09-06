@@ -48,6 +48,7 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 	private static final String EXPECTEDMOVES = "User expected model moves";
 	private static final String CUTOFF = "Cutoff sequence length";
 	private static final String MINEVENT = "Minimal events in cutoff sequence";
+	private static final String MINMODELMOVECOST = "Minimal model move cost";
 
 	private Map<Transition, Integer> mapTrans2Cost;
 	private Map<XEventClass, Integer> mapEvClass2Cost;
@@ -178,6 +179,7 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 		result.addInfo(MINEVENT, Integer.toString(minEvent));
 		result.addInfo(PNRepResult.VISTITLE, "Heuristic Alignments of "
 				+ XConceptExtension.instance().extractName(xLog) + " on " + net.getLabel());
+		result.addInfo(MINMODELMOVECOST, Double.toString(minCost));
 
 		return result;
 	}
