@@ -69,28 +69,11 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 		calculator.NAMES = false;
 
 		boolean gurobi;
-		int cBound, rBound;
-		if (!calculator.setLPSolve()) {
-			if (!calculator.setGurobi()) {
-				// LpSolve is set
-				// Cannot set LpSolve either. Throw an exception
-				throw new AStarException(
-						"Gurobi and LpSolve are both not available. One of them is needed for this plugin.");
-			} else {
-				gurobi = true;
-				cBound = 3000;
-				rBound = 4000;
-			}
-		} else {
-			gurobi = false;
-			cBound = 1500;
-			rBound = 2000;
-		}
 
 		calculator.setLPSolve();
 		gurobi = false;
-		cBound = 500;
-		rBound = 800;
+		int cBound = 500;
+		int rBound = 800;
 
 		// Set parameters just over the bounds for the ILP's
 		int cutOffEvent = expectedModelMoves;
@@ -117,6 +100,7 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 				gurobi = true;
 				context.log("Solver set to Gurobi, because of problem size");
 			} else if (minEvent > 1) {
+				context.log("Failed to load Gurobi...");
 				// cannot setup gurobi. Nothing we can do, but resort to smallest case.
 				minEvent = 1;
 				cutOffEvent = 1 + expectedModelMoves;
@@ -127,6 +111,12 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 		context.log("Starting replay with " + cutOffEvent + " exact variables containing at least " + minEvent
 				+ " labeled moves.");
 		context.log("Estimated ILP size: " + columns + " columns and " + rows + " rows.");
+
+		calculator.VERBOSE = false;
+		calculator.NAMES = false;
+		calculator.EPSILON = 0;
+		cutOffEvent = 3;
+		minEvent = 1;
 
 		long startWhole = System.currentTimeMillis();
 		double minCost;
@@ -147,9 +137,9 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 				calculator.setMinEvents(Math.min(minEvent, log[tr].length));
 				calculator.setCutOffLength(calculator.getMinEvents() * (expectedModelMoves + 1));
 
-				calculator.setGurobi();
-				calculator.setMinEvents(5);
-				calculator.setCutOffLength(20);
+				//				calculator.setGurobi();
+				//				calculator.setMinEvents(5);
+				//				calculator.setCutOffLength(20);
 
 				context.log("Starting replay of trace " + tr + "/" + log.length + " with " + cutOffEvent
 						+ " exact variables containing at least " + minEvent + " labeled moves.");

@@ -71,6 +71,8 @@ public class HeuristicAntiAlignmentAlgorithm extends AbstractHeuristicILPReplaye
 		calculator2 = new AntiAlignmentILPCalculator(net, initialMarking, finalMarking, label2short, short2label,
 				mapping, log, max, maxFactor);
 
+		calculator2.setCutOffLength(4);
+
 		if (progress != null) {
 			if (progress.isCancelled()) {
 				return null;

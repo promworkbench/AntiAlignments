@@ -271,6 +271,7 @@ public abstract class AbstractILPCalculator {
 			mode = MODE_GUROBI;
 			return true;
 		} catch (GRBException | UnsatisfiedLinkError | NoClassDefFoundError _) {
+			System.err.println(_.getMessage());
 			mode = MODE_LPSOLVE;
 			return false;
 		}

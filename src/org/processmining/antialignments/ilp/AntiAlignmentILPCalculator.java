@@ -507,7 +507,6 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 			System.out.println("Solving using sequential hybrid approach.");
 		}
 
-		cutOffLength = 15;
 		Stack<Transition> firingSequence = new Stack<Transition>();
 		TShortList antiAlignment = new TShortArrayList(maxLength * maxFactor);
 		//		solveByDrillingDown(maxLength * maxFactor, initialMarking, finalMarking, firingSequence, antiAlignment, -1, 0);
@@ -520,7 +519,6 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 		// FiringSequence and anti-alignment are known, but the distances to the log need to be computed.
 		short[] aa = antiAlignment.toArray();
 		int hd = getMinimalHammingDistanceToLog(aa, log, -1);
-		cutOffLength = 15;
 
 		//		LPMatrix lpMatrix = setupLpForFullSequence(maxLength * maxFactor, true, initialMarking, finalMarking, 0);
 
