@@ -44,14 +44,13 @@ import org.processmining.plugins.replayer.replayresult.SyncReplayResult;
 public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer<Petrinet> implements
 		IPNReplayAlgorithm {
 
-	private static final String CBOUND = "Column bound";
-	private static final String RBOUND = "Row bound";
-	private static final String SOLVER = "ILP Solver";
-	private static final String TIME = "Total time (ms)";
-	private static final String EXPECTEDMOVES = "User expected model moves";
-	private static final String CUTOFF = "Cutoff sequence length";
-	private static final String MINEVENT = "Minimal events in cutoff sequence";
-	private static final String MINMODELMOVECOST = "Minimal model move cost";
+	static final String SOLVER = "ILP Solver";
+	static final String TIME = "Total time (ms)";
+	static final String EXPECTEDMOVES = "User expected model moves";
+	static final String CUTOFF = "Cutoff sequence length";
+	static final String MINEVENT = "Minimal events in cutoff sequence";
+	static final String MINMODELMOVECOST = "Minimal model move cost";
+
 	private static final boolean EXPERIMENTING = false;
 
 	private Map<Transition, Integer> mapTrans2Cost;
@@ -72,19 +71,80 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 		AlignmentILPCalculator calculator = new AlignmentILPCalculator(this.net, initialMarking, finalMarking,
 				label2short, short2label, mapping, log, mapTrans2Cost, mapEvClass2Cost, mapSync2Cost);
 
-		calculator.VERBOSE = false;
+		calculator.VERBOSE = true;
 		calculator.NAMES = false;
-
-		boolean gurobi;
-
-		calculator.setLPSolve();
-		gurobi = false;
-		int cBound = 500;
-		int rBound = 800;
 
 		// Set parameters just over the bounds for the ILP's
 		int cutOffEvent = expectedModelMoves + 1;
 		int minEvent = 1;
+
+		switchToGurobi(context, calculator, cutOffEvent, minEvent);
+
+		context.log("Starting replay with " + cutOffEvent + " exact variables containing at least " + minEvent
+				+ " labeled moves.");
+
+		long startWhole = System.currentTimeMillis();
+		double minCost;
+		try {
+			calculator.setCutOffLength(cutOffEvent);
+			calculator.setMinEvents(0);
+			context.log("Starting replay on the empty trace with " + cutOffEvent + " exact variables.");
+			TIntList moves = calculator.getAlignmentWithoutTrace(context.getProgress(), initialMarking, finalMarking);
+			minCost = calculator.getCost(moves, new short[0]);
+		} catch (LPMatrixException _) {
+			minCost = 0.0;
+		}
+		context.getProgress().inc();
+
+		PNRepResult result = null;
+		if (EXPERIMENTING) {
+			context.getProgress().setMaximum(
+					cutOffEvent * ((int) (Math.log(cutOffEvent) / Math.log(2) + 0.5)) * log.length + cutOffEvent);
+			PrintStream out;
+			try {
+				out = new PrintStream(new File("d:/temp/antialignment/log.csv"));
+			} catch (FileNotFoundException e1) {
+				out = System.out;
+			}
+			String sep = ";";
+			PNRepResultExportPlugin export = new PNRepResultExportPlugin();
+			export.printResult(out, null, sep);
+			for (int c = 15; c < cutOffEvent; c++) {
+				for (int e = 1; e < c; e *= 2) {
+
+					switchToGurobi(context, calculator, c, e);
+
+					result = computeAlignments(context, calculator, minCost, c, e);
+					export.printResult(out, result, sep);
+				}
+				result = computeAlignments(context, calculator, minCost, c, c);
+				export.printResult(out, result, sep);
+			}
+			out.close();
+		} else {
+			//			calculator.setGurobi();
+			result = computeAlignments(context, calculator, minCost, cutOffEvent, minEvent);
+		}
+
+		long endWhole = System.currentTimeMillis();
+
+		result.addInfo(PNRepResult.VISTITLE, "Heuristic Alignments of "
+				+ XConceptExtension.instance().extractName(xLog) + " on " + net.getLabel());
+		//		result.addInfo(CBOUND, Integer.toString(cBound));
+		//		result.addInfo(RBOUND, Integer.toString(rBound));
+		result.addInfo(TIME, Integer.toString((int) (endWhole - startWhole)));
+		result.addInfo(MINMODELMOVECOST, Double.toString(minCost));
+		return result;
+
+	}
+
+	private boolean switchToGurobi(PluginContext context, AlignmentILPCalculator calculator, int cutOffEvent,
+			int minEvent) {
+		calculator.setLPSolve();
+		boolean gurobi = false;
+		int cBound = 500;
+		int rBound = 800;
+
 		// estimate number of columns and rows (This is not exact!)
 		int columns = (net.getTransitions().size() + 2 * minEvent) * cutOffEvent + 2 * net.getTransitions().size()
 				+ label2short.size();
@@ -114,127 +174,16 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 			}
 
 		}
-
-		context.log("Starting replay with " + cutOffEvent + " exact variables containing at least " + minEvent
-				+ " labeled moves.");
 		context.log("Estimated ILP size: " + columns + " columns and " + rows + " rows.");
 
-		long startWhole = System.currentTimeMillis();
-		double minCost;
-		try {
-			calculator.setCutOffLength(cutOffEvent);
-			calculator.setMinEvents(0);
-			context.log("Starting replay on the empty trace with " + cutOffEvent + " exact variables.");
-			TIntList moves = calculator.getAlignmentWithoutTrace(context.getProgress(), initialMarking, finalMarking);
-			minCost = calculator.getCost(moves, new short[0]);
-		} catch (LPMatrixException _) {
-			minCost = 0.0;
-		}
-		context.getProgress().inc();
-
-		PNRepResult result = null;
-		if (EXPERIMENTING) {
-			PrintStream out;
-			try {
-				out = new PrintStream(new File("d:/temp/antialignment/log.csv"));
-			} catch (FileNotFoundException e1) {
-				out = System.out;
-			}
-			String sep = ";";
-
-			printResult(out, null, sep);
-			for (int c = cutOffEvent; c-- > 1;) {
-				for (int e = 1; e <= c; e++) {
-					//c = calculator.getMinEvents() * (expectedModelMoves + 1)
-					result = computeAlignments(context, calculator, minCost, c, e);
-					printResult(out, result, sep);
-					//				System.out.println(result.getInfo());
-				}
-			}
-			out.close();
-		} else {
-			result = computeAlignments(context, calculator, minCost, cutOffEvent, minEvent);
-		}
-
-		long endWhole = System.currentTimeMillis();
-
-		result.addInfo(PNRepResult.VISTITLE, "Heuristic Alignments of "
-				+ XConceptExtension.instance().extractName(xLog) + " on " + net.getLabel());
-		result.addInfo(CBOUND, Integer.toString(cBound));
-		result.addInfo(RBOUND, Integer.toString(rBound));
-		result.addInfo(SOLVER, gurobi ? "Gurobi" : "LpSolve");
-		result.addInfo(TIME, Integer.toString((int) (endWhole - startWhole)));
-		result.addInfo(MINMODELMOVECOST, Double.toString(minCost));
-		return result;
-
-	}
-
-	private void printResult(PrintStream out, PNRepResult result, String sep) {
-		if (result == null) {
-			out.print("FirstTrace");
-			out.print(sep);
-			out.print("RepresentedCount");
-			out.print(sep);
-			out.print("XLength");
-			out.print(sep);
-			out.print("minEvent");
-			out.print(sep);
-			out.print("FitnessCost");
-			out.print(sep);
-			out.print("TotalFitnessCost");
-			out.print(sep);
-			out.print("MoveLogFitness");
-			out.print(sep);
-			out.print("MoveModelFitness");
-			out.print(sep);
-			out.print("SolveSteps");
-			out.print(sep);
-			out.print("TraceFitness");
-			out.print(sep);
-			out.print("Time");
-			out.print(sep);
-			out.print("OriginalTraceLength");
-			out.print(sep);
-			out.print("AlignmentLength");
-			out.println();
-
-		} else {
-			for (SyncReplayResult r : result) {
-				out.print(r.getTraceIndex().first());
-				out.print(sep);
-				out.print(r.getTraceIndex().size());
-				out.print(sep);
-				out.print(result.getInfo().get(CUTOFF));
-				out.print(sep);
-				out.print(result.getInfo().get(MINEVENT));
-				out.print(sep);
-				out.print(r.getInfo().get(PNRepResult.RAWFITNESSCOST));
-				out.print(sep);
-				out.print(r.getInfo().get(PNRepResult.RAWFITNESSCOST) * r.getTraceIndex().size());
-				out.print(sep);
-				out.print(r.getInfo().get(PNRepResult.MOVELOGFITNESS));
-				out.print(sep);
-				out.print(r.getInfo().get(PNRepResult.MOVEMODELFITNESS));
-				out.print(sep);
-				out.print(r.getInfo().get(PNRepResult.NUMSTATEGENERATED));
-				out.print(sep);
-				out.print(r.getInfo().get(PNRepResult.TRACEFITNESS));
-				out.print(sep);
-				out.print(r.getInfo().get(PNRepResult.TIME));
-				out.print(sep);
-				out.print(r.getInfo().get(PNRepResult.ORIGTRACELENGTH));
-				out.print(sep);
-				out.print(r.getStepTypes().size());
-				out.println();
-			}
-		}
-		out.flush();
+		return gurobi;
 	}
 
 	public PNRepResult computeAlignments(PluginContext context, AlignmentILPCalculator calculator, double minCost,
 			int cutOffEvent, int minEvent) {
 		List<SyncReplayResult> results = new ArrayList<>(log.length);
 		for (int tr = 0; tr < log.length && !context.getProgress().isCancelled(); tr++) {
+			//		for (int tr = log.length; tr-- > 0 && !context.getProgress().isCancelled();) {
 			try {
 				calculator.setMinEvents(Math.min(minEvent, log[tr].length));
 				calculator.setCutOffLength(cutOffEvent);
@@ -274,6 +223,7 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 		result.addInfo(EXPECTEDMOVES, Integer.toString(expectedModelMoves));
 		result.addInfo(CUTOFF, Integer.toString(cutOffEvent));
 		result.addInfo(MINEVENT, Integer.toString(minEvent));
+		result.addInfo(SOLVER, calculator.isGurobi() ? "Gurobi" : "LpSolve");
 
 		return result;
 	}

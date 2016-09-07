@@ -73,6 +73,10 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 
 	private final int[] syncMoveCost;
 
+	private int alignmentCostRow;
+
+	private int progressRow;
+
 	public AlignmentILPCalculator(Petrinet net, Marking initialMarking, Marking finalMarking,
 			TObjectShortMap<XEventClass> label2short, TShortObjectMap<XEventClass> short2label,
 			TransEvClassMapping mapping, short[][] log, Map<Transition, Integer> mapTrans2Cost,
@@ -134,7 +138,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 		TShortList evts = new TShortArrayList();
 		TShortList indices = new TShortArrayList();
 		short pos = 0;
-		for (short e = (short) startTraceAt; e < trace.length && e < startTraceAt + maxLengthX; e++) {
+		for (short e = (short) startTraceAt; e < trace.length && e < startTraceAt + traceWindow.length; e++) {
 			for (short t = invisibleTransitions; t < transitions; t++) {
 				if (equalLabel(t, trace[e])) {
 					if (label2pos[trace[e]] < 0) {
@@ -190,10 +194,10 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 
 		// row for the alignment costs
 
-		int acRow = lp.getNrows() - 1;
-		int progressRow = lp.getNrows() - 2;
+		alignmentCostRow = lp.getNrows() - 1;
+		progressRow = lp.getNrows() - 2;
 
-		lp.setConstrType(acRow, LPMatrix.GE);
+		lp.setConstrType(alignmentCostRow, LPMatrix.GE);
 
 		int labelCountRowOffset = maxLengthX * spRows + places;
 
@@ -227,7 +231,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 					matrixA.copyColumnIntoMatrix(syncTransitionMap[sm], lp, block * spRows, col);
 					// token flow on event
 					lp.setMat(firstEventRow + syncEventMap[sm], col, -1);
-					if (syncEventMap[sm] < synchronousTransitions - 1) {
+					if (syncEventMap[sm] < traceWindow.length - 1) {
 						lp.setMat(firstEventRow + syncEventMap[sm] + 1, col, 1);
 					}
 				}
@@ -249,11 +253,12 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 				int col = block * spCols + t;
 				// Set Objective
 				lp.setObjective(col, getCostForModelMove(t));
+				lp.setMat(alignmentCostRow, col, getCostForModelMove(t));
+
 				lp.setMat(progressRow, col, 1);
 
 				lp.setBinary(col, integerVariables);
 				lp.setUpbo(col, 1);
-				lp.setMat(acRow, col, getCostForModelMove(t));
 				// Add labels
 				if (NAMES) {
 					lp.setColName(col, "c" + block + "M" + t);
@@ -274,7 +279,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 
 				// Set Objective
 				lp.setObjective(col, getCostForSync(syncTransitionMap[sm], syncLabelMap[sm]));
-				lp.setMat(acRow, col, getCostForSync(syncTransitionMap[sm], syncLabelMap[sm]));
+				lp.setMat(alignmentCostRow, col, getCostForSync(syncTransitionMap[sm], syncLabelMap[sm]));
 				lp.setMat(progressRow, col, 1);
 				lp.setBinary(col, integerVariables);
 				lp.setUpbo(col, 1);
@@ -295,7 +300,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 
 				// Set Objective
 				lp.setObjective(col, getCostForLogMove(traceWindow[e]));
-				lp.setMat(acRow, col, getCostForLogMove(traceWindow[e]));
+				lp.setMat(alignmentCostRow, col, getCostForLogMove(traceWindow[e]));
 				lp.setMat(progressRow, col, 1);
 				lp.setBinary(col, integerVariables);
 				lp.setUpbo(col, 1);
@@ -327,7 +332,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 				lp.setObjective(col, getCostForModelMove(t));
 			}
 
-			lp.setMat(acRow, col, getCostForModelMove(t));
+			lp.setMat(alignmentCostRow, col, getCostForModelMove(t));
 
 			// count progress
 			lp.setMat(progressRow, col, 1);
@@ -346,7 +351,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 			int col = maxLengthX * spCols + transitions - invisibleTransitions + t;
 			// Set Objective
 			lp.setObjective(col, getCostForSync(t, trans2label[t]));
-			lp.setMat(acRow, col, getCostForSync(t, trans2label[t]));
+			lp.setMat(alignmentCostRow, col, getCostForSync(t, trans2label[t]));
 
 			// count progress
 			lp.setMat(progressRow, col, 1);
@@ -373,7 +378,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 
 			// Set Objective
 			lp.setObjective(col, getCostForLogMove(l));
-			lp.setMat(acRow, col, getCostForLogMove(l));
+			lp.setMat(alignmentCostRow, col, getCostForLogMove(l));
 
 			// count progress
 			lp.setMat(progressRow, col, 1);
@@ -585,7 +590,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 				System.out.println("Trying to get to " + finalMarking
 						+ //
 						" starting with  " + maxLengthX + " exact steps with [" + minEvents + ".." + maxLengthX
-						+ "] events explained, starting from index " + startTraceAt + "/" + trace.length + ".");
+						+ "] events explained, starting from index " + startTraceAt + "/" + (trace.length - 1) + ".");
 			}
 
 			long start = System.currentTimeMillis();
@@ -601,12 +606,13 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 			double[] vars = new double[matrix.getNcolumns()];
 			long mid = System.currentTimeMillis();
 			int result = matrix.solve(vars);
+			System.out.println();
 			steps++;
 
 			if (result == LPMatrix.OPTIMAL) {
 
 				// Update the alignment costs
-				double costX = matrix.product(vars, 0, spCols * maxLengthX, matrix.getNrows() - 1);
+				double costX = matrix.product(vars, 0, spCols * maxLengthX, alignmentCostRow);
 				//				double costY = matrix.product(vars, spCols * maxLengthX, vars.length, matrix.getNrows() - 1);
 				alignmentCosts += costX;
 
@@ -933,7 +939,11 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 					// t -=2 means: process this move again
 					// t -=3 means: process previous move.
 					mPos--;
-					t_i -= 3;
+					if (t_i > 1) {
+						t_i -= 3;
+					} else {
+						t_i = -1;
+					}
 				} else if (mergeMoves) {
 					// push on logMoveStack
 					lPos++;
@@ -989,7 +999,11 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 					checked--;
 
 					lPos--;
-					t_i -= 3;
+					if (t_i > 1) {
+						t_i -= 3;
+					} else {
+						t_i = -1;
+					}
 				} else if (mergeMoves) {
 					mPos++;
 					modelMoveStack[mPos] = trans2label[t];
