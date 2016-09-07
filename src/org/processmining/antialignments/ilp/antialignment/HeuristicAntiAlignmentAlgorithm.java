@@ -18,7 +18,6 @@ import org.deckfour.xes.classification.XEventClass;
 import org.deckfour.xes.extension.std.XConceptExtension;
 import org.deckfour.xes.model.XLog;
 import org.processmining.antialignments.bruteforce.BreadthFirstTraceSearch;
-import org.processmining.antialignments.ilp.AntiAlignmentILPCalculator;
 import org.processmining.antialignments.ilp.util.AbstractHeuristicILPReplayer;
 import org.processmining.antialignments.ilp.util.AlignedRepresentative;
 import org.processmining.antialignments.ilp.util.AntiAlignments;
@@ -44,6 +43,8 @@ public class HeuristicAntiAlignmentAlgorithm extends AbstractHeuristicILPReplaye
 	private static final String LOGGENERALIZATION = "Log-based Generalization";
 	private static final String TRACEPRECISION = "Trace-based Precision";
 	private static final String TRACEGENERALIZATION = "Trace-based Generalization";
+	private static final String MAXLENGTH = "Maximum length of Anti Alignment";
+	private static final String MAXFACTOR = "Max Factor";
 
 	private Double traceFitness;
 
@@ -69,13 +70,14 @@ public class HeuristicAntiAlignmentAlgorithm extends AbstractHeuristicILPReplaye
 		}
 
 		// Start anti-alignment computation
-		int max = (int) (maxTraceLength * 2 * maxFactor + 0.5);
+		int max = AntiAlignmentILPCalculator.getMaxLengthLog(maxTraceLength, maxFactor);
 
 		AntiAlignmentILPCalculator calculator2 = null;
+		AntiAlignmentILPCalculator.VERBOSE = false;
 		calculator2 = new AntiAlignmentILPCalculator(net, initialMarking, finalMarking, label2short, short2label,
 				mapping, log, max, maxFactor);
 
-		calculator2.setCutOffLength(4);
+		calculator2.setCutOffLength(cutOffLength);
 
 		if (progress != null) {
 			if (progress.isCancelled()) {
@@ -152,13 +154,28 @@ public class HeuristicAntiAlignmentAlgorithm extends AbstractHeuristicILPReplaye
 
 	}
 
-	public PNRepResult getPNRepResult(AntiAlignments aa, AntiAlignmentValues values) {
+	public PNRepResult getPNRepResult(AntiAlignments aa, AntiAlignmentValues values, AntiAlignmentParameters parameters) {
 		Collection<SyncReplayResult> collection = new ArrayList<>();
 		for (int t = 0; t <= log.length; t++) {
-			collection.add(getSyncReplayResult(aa, t));
+			if (t < log.length) {
+				collection.add(getSyncReplayResult(aa, t,
+						AntiAlignmentILPCalculator.getMaxLengthRemovedTrace(log[t], parameters.getMaxFactor())));
+			} else {
+				collection.add(getSyncReplayResult(
+						aa,
+						t,
+						AntiAlignmentILPCalculator.getMaxLengthLog(parameters.getCutOffLength(),
+								parameters.getMaxFactor())));
+
+			}
 		}
 		PNRepResult res = new PNRepResult(collection);
 
+		res.addInfo(MAXFACTOR, Double.toString(parameters.getMaxFactor()));
+		res.addInfo(
+				MAXLENGTH,
+				Integer.toString(AntiAlignmentILPCalculator.getMaxLengthLog(parameters.getCutOffLength(),
+						parameters.getMaxFactor())));
 		res.addInfo(PRECISION, Double.toString(values.getPrecision()));
 		res.addInfo(GENERALIZATION, Double.toString(values.getGeneralization()));
 		res.addInfo(LOGPRECISION, Double.toString(values.getLogPrecision()));
@@ -186,7 +203,7 @@ public class HeuristicAntiAlignmentAlgorithm extends AbstractHeuristicILPReplaye
 			// * Math.max(0, aa.getAADistanceForLogWithoutTrace(t)
 			// - recDistances[t])
 			// / (double) aa.getMaxDistanceForTrace(t);
-			double d = Math.max(aa.getAAForLogWithoutTrace(t).length, aa.getMaxDistanceForTrace(t));
+			double d = Math.max(aa.getAAForLogWithoutTrace(t).length, log[t].length);
 			double aaDistance = d < 1 ? 1 : aa.getAADistanceForLogWithoutTrace(t) / d;
 			assert 0 <= aaDistance && aaDistance <= 1;
 			// double recDistance = newStateCounts[t] == 0 ? 0 : recDistances[t]
@@ -211,7 +228,7 @@ public class HeuristicAntiAlignmentAlgorithm extends AbstractHeuristicILPReplaye
 
 		}
 
-		double d = Math.max(aa.getAAForLog().length, aa.getMaxDistanceForLog());
+		double d = Math.max(aa.getAAForLog().length, maxTraceLength);
 		double aaDistance = d < 1 ? 1 : aa.getAADistanceForLog() / d;
 		assert 0 <= aaDistance && aaDistance <= 1;
 		// double recDistance = newStateCounts[t] == 0 ? 0 : recDistances[t]
@@ -223,7 +240,7 @@ public class HeuristicAntiAlignmentAlgorithm extends AbstractHeuristicILPReplaye
 		d = Math.sqrt(d);
 		d = Math.min(1, d);
 
-		return new double[] { (sum / (double) sumFreq), 1 - d };
+		return new double[] { (sum / sumFreq), 1 - d };
 
 	}
 
@@ -238,7 +255,8 @@ public class HeuristicAntiAlignmentAlgorithm extends AbstractHeuristicILPReplaye
 
 			// the distance to the removed trace is at most the
 			// length of the removed trace
-			assert (int) (log[t].length * aa.getMaxFactorForTraces()) >= aa.getAADistanceToTrace(t);
+			assert (AntiAlignmentILPCalculator.getMaxLengthRemovedTrace(log[t], aa.getMaxFactorForTraces())) >= aa
+					.getAADistanceToTrace(t);
 			// we normalize on the length of the trace * maxFactor as this is
 			// the given maximum
 			// to the anti-alignment algorithm.
@@ -248,13 +266,14 @@ public class HeuristicAntiAlignmentAlgorithm extends AbstractHeuristicILPReplaye
 
 			// We can also normalize on the length of the returned
 			// anti-alignment!
-			double d = Math.min(aa.getAAForLogWithoutTrace(t).length, log[t].length * aa.getMaxFactorForTraces());
+			double d = Math.max(aa.getAAForLogWithoutTrace(t).length, log[t].length);
 			sum += d < 1 ? f : f * (aa.getAADistanceToTrace(t) / d);
 			sumFreq += f;
+			assert sum <= sumFreq;
 
 		}
-		double d = Math.min(aa.getAAForLog().length, aa.getMaxAntiAlignmentLength());
-		return new double[] { 1 - sum / (double) sumFreq, d < 1 ? 0 : 1 - aa.getAADistanceForLog() / d };
+		double d = Math.max(aa.getAAForLog().length, maxTraceLength);
+		return new double[] { 1 - sum / sumFreq, d < 1 ? 0 : 1 - aa.getAADistanceForLog() / d };
 
 	}
 
@@ -421,7 +440,7 @@ public class HeuristicAntiAlignmentAlgorithm extends AbstractHeuristicILPReplaye
 		return s;
 	}
 
-	protected SyncReplayResult getSyncReplayResult(AntiAlignments antiAlignments, int trace) {
+	protected SyncReplayResult getSyncReplayResult(AntiAlignments antiAlignments, int trace, int maxLength) {
 
 		Vector<Transition> moves;
 		if (trace >= 0 && trace < log.length) {
@@ -500,6 +519,7 @@ public class HeuristicAntiAlignmentAlgorithm extends AbstractHeuristicILPReplaye
 
 			info.put(HAMMINGDISTANCETOLOG, antiAlignments.getAADistanceForLogWithoutTrace(trace));
 			info.put(HAMMINGDISTANCETOREMOVED, (double) antiAlignments.getAADistanceToTrace(trace));
+			info.put(MAXLENGTH, (double) maxLength);
 			info.put(PNRepResult.ORIGTRACELENGTH, (double) xLog.get(xTrace).size());
 			info.put(PNRepResult.TIME, antiAlignments.getTimeForTrace(trace));
 		} else {

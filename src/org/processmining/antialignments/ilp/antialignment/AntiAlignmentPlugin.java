@@ -163,7 +163,7 @@ public class AntiAlignmentPlugin {
 
 		AntiAlignmentValues values = algorithm.computePrecisionAndGeneralization(aa);
 
-		return algorithm.getPNRepResult(aa, values);
+		return algorithm.getPNRepResult(aa, values, parameters);
 
 	}
 

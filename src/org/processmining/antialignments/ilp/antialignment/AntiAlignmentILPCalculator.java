@@ -1,4 +1,4 @@
-package org.processmining.antialignments.ilp;
+package org.processmining.antialignments.ilp.antialignment;
 
 import gnu.trove.list.TShortList;
 import gnu.trove.list.array.TShortArrayList;
@@ -17,6 +17,7 @@ import nl.tue.astar.util.LPMatrix;
 import nl.tue.astar.util.LPMatrix.LPMatrixException;
 
 import org.deckfour.xes.classification.XEventClass;
+import org.processmining.antialignments.ilp.AbstractILPCalculator;
 import org.processmining.antialignments.ilp.util.AntiAlignments;
 import org.processmining.antialignments.ilp.util.HybridEquationResult;
 import org.processmining.framework.plugin.Progress;
@@ -38,6 +39,14 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 	private final double maxFactor;
 
 	private final int maxLength;
+
+	public static int getMaxLengthLog(int maxTraceLength, double maxFactor) {
+		return (int) (maxTraceLength * 2 * maxFactor + 0.5);
+	}
+
+	public static int getMaxLengthRemovedTrace(short[] trace, double maxFactor) {
+		return (int) (trace.length * 2 * maxFactor + 0.5);
+	}
 
 	public AntiAlignmentILPCalculator(Petrinet net, Marking initialMarking, Marking finalMarking,
 			TObjectShortMap<XEventClass> label2short, TShortObjectMap<XEventClass> short2label,
@@ -83,6 +92,11 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 				System.err.println("HMM");
 			}
 
+			if (VERBOSE) {
+				assert checkFiringSequence(firingSequence, initialMarking, marking);
+				assert checkHammingDistancesOnPrefix(hammingDistances, antiAlignment.toArray());
+				assert startTracesAt == antiAlignment.size();
+			}
 			matrix = setupLpForHybrid(maxLengthX, maxLengthY, true, marking, finalMarking, traceToIgnore, startTracesAt);
 
 			//			FileWriter writer;
@@ -139,16 +153,18 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 
 				// remove the last transition from the stack.
 				Transition last;
-				short label = antiAlignment.get(antiAlignment.size() - 1);
-				antiAlignment.removeAt(antiAlignment.size() - 1);
+				int evt = antiAlignment.size() - 1;//maxLength - maxLengthX - maxLengthY - 1;
+				short label = antiAlignment.get(evt);
+				antiAlignment.removeAt(evt);
 				// correct also the hamming distances...
-				int evt = maxLength - maxLengthX - maxLengthY - 1;
 				for (int t = 0; t < log.length; t++) {
 					if (evt >= log[t].length || log[t][evt] != label) {
 						hammingDistances[t]--;
 					}
 				}
-
+				if (VERBOSE) {
+					assert checkHammingDistancesOnPrefix(hammingDistances, antiAlignment.toArray());
+				}
 				do {
 					last = firingSequence.pop();
 
@@ -175,6 +191,9 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 					// X transition.
 				} while (!firingSequence.isEmpty() && firingSequence.peek().isInvisible());
 
+				if (VERBOSE) {
+					assert checkFiringSequence(firingSequence, initialMarking, intermediate.getMarking());
+				}
 				// We've removed the last transition in the row, 
 				// to avoid loops in backtracking, require one more step in X
 				maxLengthX++;
@@ -184,24 +203,25 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 				for (int t = 0; t < log.length; t++) {
 					hammingDistances[t] += hd[t];
 				}
-				int[] hdComputed = new int[log.length];
-				for (int t = 0; t < log.length; t++) {
-					hdComputed[t] = getHammingDistanceToTrace(log[t], antiAlignment.toArray())
-							- (log[t].length > antiAlignment.size() ? log[t].length - antiAlignment.size() : 0);
+				if (VERBOSE) {
+					assert checkFiringSequence(firingSequence, initialMarking, nextResult.getMarking());
+					assert checkHammingDistancesOnPrefix(hammingDistances, antiAlignment.toArray());
 				}
-				assert Arrays.equals(hdComputed, hammingDistances);
-
 				// Setup for next iteration
 				intermediate = nextResult;
 				splits.add(intermediate);
-				maxLengthX = cutOffLength;
 				marking = intermediate.getMarking();
 				maxLengthY -= maxLengthX;
 				startTracesAt += maxLengthX;
+				maxLengthX = cutOffLength;
+			}
+			if (VERBOSE) {
+				System.out.println("---------------------- Next Iteration --------------------------");
 			}
 		} while (maxLengthY >= 0 && !intermediate.getMarking().equals(finalMarking));
 
 		if (!intermediate.getMarking().equals(finalMarking)) {
+			maxLengthY = 0;
 			if (VERBOSE) {
 				System.out.println("Trying to get from " + marking + " to " + finalMarking + " in "
 						+ (maxLengthX + maxLengthY) + " exact steps.");
@@ -211,26 +231,23 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 			intermediate = determineSplitMarkingForHybrid(matrix, maxLengthX + maxLengthY, startTracesAt, true,
 					antiAlignment, firingSequence, hammingDistances);
 			splits.add(intermediate);
-			if (VERBOSE) {
-				System.out.println("Final marking reached.");
-			}
 		}
 
 		assert intermediate.getMarking().equals(finalMarking);
+		if (VERBOSE) {
+			System.out.println("Final marking reached.");
+		}
+
 		for (int t = 0; t < log.length; t++) {
 			hammingDistances[t] += log[t].length > antiAlignment.size() ? log[t].length - antiAlignment.size() : 0;
 		}
 
 		if (VERBOSE) {
-			int[] hdComputed = new int[log.length];
-			for (int t = 0; t < log.length; t++) {
-				hdComputed[t] = getHammingDistanceToTrace(log[t], antiAlignment.toArray());
-			}
-			assert Arrays.equals(hdComputed, hammingDistances);
+			assert checkFiringSequence(firingSequence, initialMarking, finalMarking);
+			assert checkHammingDistances(hammingDistances, antiAlignment.toArray());
 
 			System.out.println("Anti alignment: " + toString(firingSequence));
 			System.out.println("Hamming Distances solved:   " + Arrays.toString(hammingDistances));
-			System.out.println("Hamming Distances computed: " + Arrays.toString(hdComputed));
 			System.out.println("Dlog: " + getMinimalHammingDistanceToLog(antiAlignment.toArray(), log, traceToIgnore));
 			System.out.println("Firing Sequence: " + firingSequence);
 
@@ -238,6 +255,25 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 		}
 		//		System.out.println("Test");
 
+	}
+
+	private boolean checkHammingDistancesOnPrefix(int[] hammingDistances, short[] antiAlignment) {
+		int[] hdComputed = new int[log.length];
+		for (int t = 0; t < log.length; t++) {
+			hdComputed[t] = getHammingDistanceToTrace(log[t], antiAlignment)
+					- (log[t].length > antiAlignment.length ? log[t].length - antiAlignment.length : 0);
+		}
+		assert Arrays.equals(hdComputed, hammingDistances);
+		return Arrays.equals(hdComputed, hammingDistances);
+	}
+
+	private boolean checkHammingDistances(int[] hammingDistances, short[] antiAlignment) {
+		int[] hdComputed = new int[log.length];
+		for (int t = 0; t < log.length; t++) {
+			hdComputed[t] = getHammingDistanceToTrace(log[t], antiAlignment);
+		}
+		assert Arrays.equals(hdComputed, hammingDistances);
+		return Arrays.equals(hdComputed, hammingDistances);
 	}
 
 	private boolean checkFiringSequence(Vector<Transition> firingSequence, Marking initialMarking, Marking finalMarking) {
@@ -472,11 +508,11 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 
 			for (int i = 0; i < exp; i++) {
 				firingSequence = new Stack<Transition>();
-				antiAlignment = new TShortArrayList((int) (maxLength * maxFactor + 0.5));
+				antiAlignment = new TShortArrayList(getMaxLengthLog(maxLength, maxFactor));
 				long start = System.currentTimeMillis();
 				//				solveByDrillingDown(2, maxLength * maxFactor, initialMarking, finalMarking, firingSequence,
 				//						antiAlignment, -1, 0);
-				solveSequential((int) (maxLength * maxFactor + 0.5), initialMarking, finalMarking, firingSequence,
+				solveSequential(getMaxLengthLog(maxLength, maxFactor), initialMarking, finalMarking, firingSequence,
 						antiAlignment, -1);
 				long end = System.currentTimeMillis();
 				assert checkFiringSequence(firingSequence, initialMarking, finalMarking);
@@ -509,10 +545,11 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 		}
 
 		Stack<Transition> firingSequence = new Stack<Transition>();
-		TShortList antiAlignment = new TShortArrayList((int) (maxLength * maxFactor + 0.5));
+		TShortList antiAlignment = new TShortArrayList(getMaxLengthLog(maxLength, maxFactor));
 		//		solveByDrillingDown(maxLength * maxFactor, initialMarking, finalMarking, firingSequence, antiAlignment, -1, 0);
 		long start = System.currentTimeMillis();
-		solveSequential(maxLength, initialMarking, finalMarking, firingSequence, antiAlignment, -1);
+		solveSequential(getMaxLengthLog(maxLength, maxFactor), initialMarking, finalMarking, firingSequence,
+				antiAlignment, -1);
 		long end = System.currentTimeMillis();
 		if (progress != null) {
 			progress.inc();
@@ -525,7 +562,8 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 
 		//		System.out.println("IP with " + lpMatrix.getNcolumns() + " columns and " + lpMatrix.getNrows() + " rows.");
 
-		final AntiAlignments antiAlignments = new AntiAlignments(log.length, maxLength, maxFactor);
+		final AntiAlignments antiAlignments = new AntiAlignments(log.length, getMaxLengthLog(maxLength, maxFactor),
+				maxFactor);
 
 		if (VERBOSE) {
 			System.out.println("-----------------------------------------------");
@@ -561,11 +599,11 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 				//			solveForFullSequence(lpMatrix, t, maxFactor * log[t].length, null, result);//, "D:/temp/antialignment/ilp_instance_t" + t + ".mps");
 
 			firingSequence = new Stack<Transition>();
-			antiAlignment = new TShortArrayList((int) (maxLength * maxFactor + 0.5));
+			antiAlignment = new TShortArrayList(getMaxLengthRemovedTrace(log[t], maxFactor));
 			//			solveByDrillingDown(maxFactor * log[t].length, initialMarking, finalMarking, firingSequence, antiAlignment,
 			//					t, 0);
 			start = System.currentTimeMillis();
-			solveSequential((int) (maxFactor * log[t].length + 0.5), initialMarking, finalMarking, firingSequence,
+			solveSequential(getMaxLengthRemovedTrace(log[t], maxFactor), initialMarking, finalMarking, firingSequence,
 					antiAlignment, t);
 			end = System.currentTimeMillis();
 			if (progress != null) {
@@ -1320,15 +1358,17 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 			lp.setColName(transitions * (maxLengthX + 1) + 1, "Drem");
 		}
 		// maximize Dlog
-		if (log.length == 0 || (log.length == 1 && traceToIgnore >= 0)) {
+		if (log.length == 0 || (log.length == 1 && traceToIgnore == 0)) {
 			// a DLog is a 0-column. A positive weight would make the model unbounded.
 			lp.setObjective(transitions * (maxLengthX + 1), -1);
+			// maximize Drem
+			lp.setObjective(transitions * (maxLengthX + 1) + 1, (maxLengthX + maxLengthY));
 		} else {
 			// maximize Dlog
 			lp.setObjective(transitions * (maxLengthX + 1), (maxLengthX + maxLengthY) * (maxLengthX + maxLengthY));
+			// ignore Drem
+			lp.setObjective(transitions * (maxLengthX + 1) + 1, 0);
 		}
-		// maximize Drem
-		lp.setObjective(transitions * (maxLengthX + 1) + 1, (maxLengthX + maxLengthY));
 
 		lp.setMaxim();
 
