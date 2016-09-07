@@ -944,38 +944,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 				continue;
 			}
 
-			// LogMove handled
-
-			if (e == (short) NOMOVE && trans2label[t] >= 0) {
-				// Visible model move
-				if (lPos >= 0 && logMoveStack[lPos] == trans2label[t]) {
-					// there is a log move on the stack with this label
-					// merge them
-					int m = moves.get(logMoveLocationStack[lPos]) & 0x0000FFFF;
-					m = m | (move & 0xFFFF0000);
-					moves.set(t_i, m);
-					if (VERBOSE) {
-						System.out.println("Moving log move: " + logMoveLocationStack[lPos] + " forward. Merges with "
-								+ t_i + " Checked:" + checked);
-					}
-					moves.removeAt(logMoveLocationStack[lPos]);
-					if (checked >= logMoveLocationStack[lPos]) {
-						checked--;
-					}
-
-					lPos--;
-					t_i -= 3;
-				} else if (mergeMoves) {
-					mPos++;
-					modelMoveStack[mPos] = trans2label[t];
-					modelMoveLocationStack[mPos] = t_i;
-				}
-			} else if (trans2label[t] >= 0) {
-				// empty the modelmove stack
-				mPos = -1;
-				lPos = -1;
-			}
-
+			// There is a transition to fire. Check the firing before trying the merge.
 			if (t_i > checked) {
 				checked = t_i;
 				try {
@@ -1000,9 +969,38 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 						moves.set(j - 1, move);
 					}
 					t_i--;
-					continue;
 				}
 			}
+
+			// LogMove and firing handled
+			if (e == (short) NOMOVE && trans2label[t] >= 0) {
+				// Visible model move
+				if (lPos >= 0 && logMoveStack[lPos] == trans2label[t]) {
+					// there is a log move on the stack with this label
+					// merge them
+					int m = moves.get(logMoveLocationStack[lPos]) & 0x0000FFFF;
+					m = m | (move & 0xFFFF0000);
+					moves.set(t_i, m);
+					if (VERBOSE) {
+						System.out.println("Moving log move: " + logMoveLocationStack[lPos] + " forward. Merges with "
+								+ t_i + " Checked:" + checked);
+					}
+					moves.removeAt(logMoveLocationStack[lPos]);
+					checked--;
+
+					lPos--;
+					t_i -= 3;
+				} else if (mergeMoves) {
+					mPos++;
+					modelMoveStack[mPos] = trans2label[t];
+					modelMoveLocationStack[mPos] = t_i;
+				}
+			} else if (trans2label[t] >= 0) {
+				// empty the modelmove stack
+				mPos = -1;
+				lPos = -1;
+			}
+
 		}
 
 		return ok && semantics.getCurrentState().equals(finalMarking);
@@ -1060,6 +1058,14 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 
 	public int getMinEvents() {
 		return minEvents;
+	}
+
+	public boolean isGurobi() {
+		return mode == MODE_GUROBI;
+	}
+
+	public boolean isLpSolve() {
+		return mode == MODE_LPSOLVE;
 	}
 
 }
