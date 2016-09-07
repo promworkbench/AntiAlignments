@@ -101,11 +101,11 @@ public class AntiAlignments {
 	}
 
 	public double getTimeForLog() {
-		return times[times.length - 1] / 1000.0;
+		return times[times.length - 1];
 	}
 
 	public double getTimeForTrace(int trace) {
-		return times[trace] / 1000.0;
+		return times[trace];
 	}
 
 }
