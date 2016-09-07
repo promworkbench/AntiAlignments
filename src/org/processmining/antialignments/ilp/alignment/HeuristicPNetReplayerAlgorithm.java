@@ -56,7 +56,10 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 	private Map<Transition, Integer> mapTrans2Cost;
 	private Map<XEventClass, Integer> mapEvClass2Cost;
 	private Map<Transition, Integer> mapSync2Cost;
+
 	private int expectedModelMoves;
+	private int backtrackLimit;
+	private double backtrackThreshold;
 
 	public PNRepResult replayLog(PluginContext context, PetrinetGraph net, XLog xLog, TransEvClassMapping mapping,
 			IPNReplayParameter parameters) throws AStarException {
@@ -70,6 +73,9 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 
 		AlignmentILPCalculator calculator = new AlignmentILPCalculator(this.net, initialMarking, finalMarking,
 				label2short, short2label, mapping, log, mapTrans2Cost, mapEvClass2Cost, mapSync2Cost);
+
+		calculator.setBacktrackLimit(backtrackLimit);
+		calculator.setBacktrackThreshold(backtrackThreshold);
 
 		calculator.VERBOSE = false;
 		calculator.NAMES = false;
@@ -88,6 +94,7 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 		try {
 			calculator.setCutOffLength(cutOffEvent);
 			calculator.setMinEvents(0);
+
 			context.log("Starting replay on the empty trace with " + cutOffEvent + " exact variables.");
 			TIntList moves = calculator.getAlignmentWithoutTrace(context.getProgress(), initialMarking, finalMarking);
 			minCost = calculator.getCost(moves, new short[0]);
@@ -122,7 +129,7 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 			}
 			out.close();
 		} else {
-			//			calculator.setGurobi();
+			calculator.setGurobi();
 			result = computeAlignments(context, calculator, minCost, cutOffEvent, minEvent);
 		}
 
@@ -410,7 +417,10 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 		//		maxNumOfStates = parameters.getMaxNumOfStates();
 		mapEvClass2Cost = parameters.getMapEvClass2Cost();
 		mapSync2Cost = parameters.getMapSync2Cost();
+
 		expectedModelMoves = parameters.getExpecteModelMoves();
+		backtrackLimit = parameters.getBacktrackLimit();
+		backtrackThreshold = parameters.getBacktrackThreshold();
 	}
 
 }

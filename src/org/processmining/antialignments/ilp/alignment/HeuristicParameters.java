@@ -11,6 +11,10 @@ public class HeuristicParameters extends CostBasedCompleteParam {
 
 	private int expectedModelMoves;
 
+	private int backtrackLimit;
+
+	private double backtrackThreshold;
+
 	public HeuristicParameters(Collection<XEventClass> evClassCol, XEventClass dummyEvClass,
 			Collection<Transition> transCol) {
 		super(evClassCol, dummyEvClass, transCol);
@@ -37,5 +41,21 @@ public class HeuristicParameters extends CostBasedCompleteParam {
 
 	public int getExpecteModelMoves() {
 		return this.expectedModelMoves;
+	}
+
+	public int getBacktrackLimit() {
+		return backtrackLimit;
+	}
+
+	public void setBacktrackLimit(int backtrackLimit) {
+		this.backtrackLimit = backtrackLimit;
+	}
+
+	public double getBacktrackThreshold() {
+		return backtrackThreshold;
+	}
+
+	public void setBacktrackThreshold(double backtrackThreshold) {
+		this.backtrackThreshold = backtrackThreshold;
 	}
 }

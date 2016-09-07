@@ -59,11 +59,13 @@ public class HeuristicAntiAlignmentAlgorithm extends AbstractHeuristicILPReplaye
 	}
 
 	public AntiAlignments computeAntiAlignments(Progress progress, AntiAlignmentParameters parameters) {
-		return computeAntiAlignments(progress, parameters.getCutOffLength(), parameters.getMaxFactor());
+		return computeAntiAlignments(progress, parameters.getCutOffLength(), parameters.getMaxFactor(),
+				parameters.getBacktrackLimit(), parameters.getBacktrackThreshold());
 
 	}
 
-	public AntiAlignments computeAntiAlignments(Progress progress, int cutOffLength, double maxFactor) {
+	public AntiAlignments computeAntiAlignments(Progress progress, int cutOffLength, double maxFactor,
+			int backtrackLimit, double backtrackThreshold) {
 
 		if (progress != null) {
 			progress.setMaximum(log.length + 2);
@@ -78,6 +80,8 @@ public class HeuristicAntiAlignmentAlgorithm extends AbstractHeuristicILPReplaye
 				mapping, log, max, maxFactor);
 
 		calculator2.setCutOffLength(cutOffLength);
+		calculator2.setBacktrackThreshold(backtrackThreshold);
+		calculator2.setBacktrackLimit(backtrackLimit);
 
 		if (progress != null) {
 			if (progress.isCancelled()) {

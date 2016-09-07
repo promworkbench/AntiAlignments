@@ -559,7 +559,7 @@ public class TestAntiAlignment {
 		PNRepResult alignments = alignmentAlgorithm.getAlignment(initialMarking, finalMarking, false);
 
 		return new AntiAlignmentPlugin().basicCodeStructureWithAlignments(null, net, initialMarking, finalMarking,
-				xLog, alignments, alignmentAlgorithm.mapping, new AntiAlignmentParameters(5, 1.0));
+				xLog, alignments, alignmentAlgorithm.mapping, new AntiAlignmentParameters(5, 1.0, 2, 2.0));
 
 	}
 }

@@ -17,9 +17,11 @@ public class AntiAlignmentParameterUI extends JComponent {
 	private static final long serialVersionUID = -6264123593622120018L;
 	private final NiceIntegerSlider cutOffLengthSlider;
 	private final NiceDoubleSlider maxFactorSlider;
+	private NiceDoubleSlider backtrackThreshold;
+	private NiceIntegerSlider backtrackMax;
 
 	public AntiAlignmentParameterUI() {
-		TableLayout tl = new TableLayout(new double[][] { { TableLayoutConstants.FILL }, { 80, 40, 40 } });
+		TableLayout tl = new TableLayout(new double[][] { { TableLayoutConstants.FILL }, { 80, 40, 40, 40, 40 } });
 
 		setLayout(tl);
 
@@ -43,6 +45,22 @@ public class AntiAlignmentParameterUI extends JComponent {
 		maxFactorSlider.setMinimumSize(new Dimension(700, 20));
 		add(maxFactorSlider, "0, 2, c, t");
 
+		// max backtrack
+		backtrackMax = slickerFactoryInstance.createNiceIntegerSlider(
+				"<html><h4># Maximum number of backtrack steps.</h4></html>", 0, 10, 1, Orientation.HORIZONTAL);
+		backtrackMax.setPreferredSize(new Dimension(700, 20));
+		backtrackMax.setMaximumSize(new Dimension(700, 20));
+		backtrackMax.setMinimumSize(new Dimension(700, 20));
+		add(backtrackMax, "0, 3, c, t");
+
+		// max backtrackThreshold
+		backtrackThreshold = slickerFactoryInstance.createNiceDoubleSlider(
+				"<html><h4># Backtracking threshold.</h4></html>", 0, 4.0, 2.0, Orientation.HORIZONTAL);
+		backtrackThreshold.setPreferredSize(new Dimension(700, 20));
+		backtrackThreshold.setMaximumSize(new Dimension(700, 20));
+		backtrackThreshold.setMinimumSize(new Dimension(700, 20));
+		add(backtrackThreshold, "0, 4, c, t");
+
 	}
 
 	protected void setTitle(SlickerFactory slickerFactoryInstance, String title) {
@@ -53,11 +71,20 @@ public class AntiAlignmentParameterUI extends JComponent {
 		return maxFactorSlider.getValue();
 	}
 
+	public int getBacktrackLimit() {
+		return backtrackMax.getValue();
+	}
+
+	public double getBacktrackThreshold() {
+		return backtrackThreshold.getValue();
+	}
+
 	public int getCutoffLength() {
 		return cutOffLengthSlider.getValue();
 	}
 
 	public AntiAlignmentParameters getParameters() {
-		return new AntiAlignmentParameters(getCutoffLength(), getMaxFactor());
+		return new AntiAlignmentParameters(getCutoffLength(), getMaxFactor(), getBacktrackLimit(),
+				getBacktrackThreshold());
 	}
 }

@@ -64,6 +64,7 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 			throws LPMatrixException {
 
 		int[] hammingDistances = new int[log.length];
+		int backTrackDepth = 0;
 
 		PetrinetSemantics semantics = PetrinetSemanticsFactory.regularPetrinetSemantics(Petrinet.class);
 		semantics.initialize(net.getTransitions(), initialMarking);
@@ -119,22 +120,25 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 				System.out.println("Marking reached: " + nextResult.getMarking() + " in " + nextResult.getLengthX()
 						+ " steps and estimating " + nextResult.getLengthY() + " remaining steps.");
 			}
-			if (nextResult == null
-					|| nextResult.getLengthX() + nextResult.getLengthY() < intermediate.getLengthY()
+			if (nextResult == null) {
+				if (VERBOSE) {
+					System.out.println("Backtracking because of infeasibility.");
+				}
+				// For now, assume reachability, hence feasibility. Need to add exceptions here
+				//TODO: EXCEPTION
+				assert false;
+
+			} else if (backTrackDepth < maxBackTrackDepth
+					&& nextResult.getLengthX() + nextResult.getLengthY() < intermediate.getLengthY()
 							/ backtrackThreshold) {
+				backTrackDepth++;
 				// nextResult did not live up to its expectations. 
 				// go back one step.
-				if (nextResult == null) {
-					if (VERBOSE) {
-						System.out.println("Backtracking because of infeasibility.");
-					}
-				} else {
-					if (VERBOSE) {
-						System.out.println("Backtracking since " + (nextResult.getLengthX() + nextResult.getLengthY())
-								+ " < " + intermediate.getLengthY());
-					}
-					nextResult.undo(antiAlignment, firingSequence);
+				if (VERBOSE) {
+					System.out.println("Backtracking since " + (nextResult.getLengthX() + nextResult.getLengthY())
+							+ " < " + intermediate.getLengthY());
 				}
+				undo(nextResult, antiAlignment, firingSequence);
 
 				if (antiAlignment.isEmpty()) {
 					System.err.println("Infeasible model: " + matrix.getLastSolverResult());
@@ -168,25 +172,7 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 				do {
 					last = firingSequence.pop();
 
-					for (PetrinetEdge<?, ?> e : net.getInEdges(last)) {
-						if (e instanceof Arc) {
-							Arc a = (Arc) e;
-							Place p = (Place) a.getSource();
-							int w = a.getWeight();
-							intermediate.getMarking().add(p, w);
-						}
-					}
-					for (PetrinetEdge<?, ?> e : net.getOutEdges(last)) {
-						if (e instanceof Arc) {
-							Arc a = (Arc) e;
-							Place p = (Place) a.getTarget();
-							int w = a.getWeight();
-							while (w > 0) {
-								intermediate.getMarking().remove(p);
-								w--;
-							}
-						}
-					}
+					unfire(last, intermediate.getMarking());
 					// and remove all invisible transitions before, as they belong to the last 
 					// X transition.
 				} while (!firingSequence.isEmpty() && firingSequence.peek().isInvisible());
@@ -214,6 +200,7 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 				maxLengthY -= maxLengthX;
 				startTracesAt += maxLengthX;
 				maxLengthX = cutOffLength;
+				backTrackDepth = 0;
 			}
 			if (VERBOSE) {
 				System.out.println("---------------------- Next Iteration --------------------------");
@@ -255,6 +242,15 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 		}
 		//		System.out.println("Test");
 
+	}
+
+	private void undo(HybridEquationResult result, TShortList antiAlignment, Stack<Transition> firingSequence) {
+		// remove lengthX elements from anitAlignment
+		antiAlignment.remove(antiAlignment.size() - result.getLengthX(), result.getLengthX());
+		int popped = 0;
+		while (firingSequence.peek().isInvisible() || popped < result.getLengthX()) {
+			popped += firingSequence.pop().isInvisible() ? 0 : 1;
+		}
 	}
 
 	private boolean checkHammingDistancesOnPrefix(int[] hammingDistances, short[] antiAlignment) {
@@ -1467,4 +1463,5 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 			return null;
 		}
 	}
+
 }

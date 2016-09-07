@@ -55,6 +55,7 @@ public abstract class AbstractILPCalculator {
 	protected int mode;
 	protected int cutOffLength = 5;
 	protected double backtrackThreshold = 2.0;
+	protected int maxBackTrackDepth = 1;
 
 	// Represents the matrix of consumption of the original net.
 	protected final Matrix matrixAMin;
@@ -276,4 +277,35 @@ public abstract class AbstractILPCalculator {
 			return false;
 		}
 	}
+
+	protected void unfire(Transition last, Marking marking) {
+		for (PetrinetEdge<?, ?> e : net.getInEdges(last)) {
+			if (e instanceof Arc) {
+				Arc a = (Arc) e;
+				Place p = (Place) a.getSource();
+				int w = a.getWeight();
+				marking.add(p, w);
+			}
+		}
+		for (PetrinetEdge<?, ?> e : net.getOutEdges(last)) {
+			if (e instanceof Arc) {
+				Arc a = (Arc) e;
+				Place p = (Place) a.getTarget();
+				int w = a.getWeight();
+				while (w > 0) {
+					marking.remove(p);
+					w--;
+				}
+			}
+		}
+	}
+
+	public void setBacktrackLimit(int backtrackLimit) {
+		this.maxBackTrackDepth = backtrackLimit;
+	}
+
+	public void setBacktrackThreshold(double backtrackThreshold) {
+		this.backtrackThreshold = backtrackThreshold;
+	}
+
 }
