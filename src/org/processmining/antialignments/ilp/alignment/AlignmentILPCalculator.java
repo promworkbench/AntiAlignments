@@ -606,7 +606,6 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 			double[] vars = new double[matrix.getNcolumns()];
 			long mid = System.currentTimeMillis();
 			int result = matrix.solve(vars);
-			System.out.println();
 			steps++;
 
 			if (result == LPMatrix.OPTIMAL) {
