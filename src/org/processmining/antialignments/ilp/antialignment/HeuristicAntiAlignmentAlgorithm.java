@@ -35,16 +35,16 @@ import org.processmining.plugins.replayer.replayresult.SyncReplayResult;
 
 public class HeuristicAntiAlignmentAlgorithm extends AbstractHeuristicILPReplayer<Petrinet> {
 
-	public static final String HAMMINGDISTANCETOLOG = "Minimal Hamming Distance to Log";
-	public static final String HAMMINGDISTANCETOREMOVED = "Hamming Distance to Removed Trace";
+	public static final String HAMMINGDISTANCETOLOG = "Hamming Distance to Log (min)";
+	public static final String HAMMINGDISTANCETOREMOVED = "Hamming Distance to Trace";
 	private static final String PRECISION = "Precision";
 	private static final String GENERALIZATION = "Generalization";
-	private static final String LOGPRECISION = "Log-based Precision";
-	private static final String LOGGENERALIZATION = "Log-based Generalization";
-	private static final String TRACEPRECISION = "Trace-based Precision";
-	private static final String TRACEGENERALIZATION = "Trace-based Generalization";
-	private static final String MAXLENGTH = "Maximum length of Anti Alignment";
-	private static final String MAXFACTOR = "Max Factor";
+	private static final String LOGPRECISION = "Precision (log-based)";
+	private static final String LOGGENERALIZATION = "Generalization (log-based)";
+	private static final String TRACEPRECISION = "Precision (trace-based)";
+	private static final String TRACEGENERALIZATION = "Generalization (log-based)";
+	private static final String MAXLENGTH = "Parameter: Maximum length";
+	private static final String MAXFACTOR = "Parameter: Max Factor";
 
 	private Double traceFitness;
 
