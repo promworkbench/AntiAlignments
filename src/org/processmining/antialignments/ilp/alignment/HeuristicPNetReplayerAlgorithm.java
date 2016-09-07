@@ -71,7 +71,7 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 		AlignmentILPCalculator calculator = new AlignmentILPCalculator(this.net, initialMarking, finalMarking,
 				label2short, short2label, mapping, log, mapTrans2Cost, mapEvClass2Cost, mapSync2Cost);
 
-		calculator.VERBOSE = true;
+		calculator.VERBOSE = false;
 		calculator.NAMES = false;
 
 		// Set parameters just over the bounds for the ILP's
