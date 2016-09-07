@@ -1,11 +1,10 @@
-package org.processmining.antialignments;
+package org.processmining.antialignments.ilp.antialignment;
 
 import nl.tue.astar.AStarException;
 
+import org.deckfour.uitopia.api.event.TaskListener.InteractionResult;
 import org.deckfour.xes.extension.std.XConceptExtension;
 import org.deckfour.xes.model.XLog;
-import org.processmining.antialignments.ilp.antialignment.AntiAlignmentValues;
-import org.processmining.antialignments.ilp.antialignment.HeuristicAntiAlignmentAlgorithm;
 import org.processmining.antialignments.ilp.util.AntiAlignments;
 import org.processmining.contexts.uitopia.UIPluginContext;
 import org.processmining.contexts.uitopia.annotations.UITopiaVariant;
@@ -28,7 +27,7 @@ import org.processmining.plugins.petrinet.replayresult.PNRepResult;
 
 @Plugin(name = "Anti-Alignment Precision/Generalization", level = PluginLevel.NightlyBuild, //
 returnLabels = { "Anti-alignments" }, returnTypes = { PNRepResult.class },//
-parameterLabels = { "Petri net", "Event Log", "Alignment" }, //
+parameterLabels = { "Petri net", "Event Log", "Alignment", "Parameters" }, //
 help = "Measure precision/generalization using anti alignments.", userAccessible = true)
 public class AntiAlignmentPlugin {
 
@@ -62,7 +61,57 @@ public class AntiAlignmentPlugin {
 	@UITopiaVariant(affiliation = UITopiaVariant.EHV, author = "Boudewijn van Dongen", email = "b.f.v.dongen@tue.nl", //
 	pack = "AntiAlignments")
 	@PluginVariant(variantLabel = "With alignments", requiredParameterLabels = { 0, 1, 2 })
-	public PNRepResult measurePrecision(PluginContext context, Petrinet net, XLog log, PNRepResult alignments) {
+	public PNRepResult measurePrecision(UIPluginContext context, Petrinet net, XLog log, PNRepResult alignments) {
+		// retrieve mapping between process model to log
+		try {
+			ConnectionManager connManager = context.getConnectionManager();
+			EvClassLogPetrinetConnection conn = connManager.getFirstConnection(EvClassLogPetrinetConnection.class,
+					context, net, log);
+			TransEvClassMapping mapping = (TransEvClassMapping) conn
+					.getObjectWithRole(EvClassLogPetrinetConnection.TRANS2EVCLASSMAPPING);
+
+			// get marking
+			InitialMarkingConnection initMarkingConn = connManager.getFirstConnection(InitialMarkingConnection.class,
+					context, net);
+			Marking initialMarking = initMarkingConn.getObjectWithRole(InitialMarkingConnection.MARKING);
+
+			FinalMarkingConnection finalMarkingConn = connManager.getFirstConnection(FinalMarkingConnection.class,
+					context, net);
+			Marking finalMarking = finalMarkingConn.getObjectWithRole(FinalMarkingConnection.MARKING);
+
+			AntiAlignmentParameterUI ui = new AntiAlignmentParameterUI();
+			InteractionResult interactionResult = context.showConfiguration("Anti Alignment Parameters", ui);
+
+			if (interactionResult == InteractionResult.CANCEL) {
+				context.getFutureResult(0).cancel(true);
+				return null;
+			}
+			PNRepResult replayRes = basicCodeStructureWithAlignments(context.getProgress(), net, initialMarking,
+					finalMarking, log, alignments, mapping, ui.getParameters());
+			if (replayRes != null) {
+				context.addConnection(new PNRepResultAllRequiredParamConnection("Connection between replay result, "
+						+ XConceptExtension.instance().extractName(log) + ", and " + net.getLabel(), net, log, mapping,
+						null, null, replayRes));
+
+			}
+
+			context.getFutureResult(0).setLabel(
+					"Anti-alignments for log " + XConceptExtension.instance().extractName(log) + " and "
+							+ net.getLabel());
+
+			return replayRes;
+
+		} catch (ConnectionCannotBeObtained noConnection) {
+			context.log("No connection between the given net and log. For computing anti-alignment based precision, the plugin"
+					+ " needs a Petri net with an initial and final marking!");
+		}
+
+		return null;
+	}
+
+	@PluginVariant(variantLabel = "With alignments", requiredParameterLabels = { 0, 1, 2, 3 })
+	public PNRepResult measurePrecision(PluginContext context, Petrinet net, XLog log, PNRepResult alignments,
+			AntiAlignmentParameters parameters) {
 		// retrieve mapping between process model to log
 		try {
 			ConnectionManager connManager = context.getConnectionManager();
@@ -81,7 +130,7 @@ public class AntiAlignmentPlugin {
 			Marking finalMarking = finalMarkingConn.getObjectWithRole(FinalMarkingConnection.MARKING);
 
 			PNRepResult replayRes = basicCodeStructureWithAlignments(context.getProgress(), net, initialMarking,
-					finalMarking, log, alignments, mapping);
+					finalMarking, log, alignments, mapping, parameters);
 			if (replayRes != null) {
 				context.addConnection(new PNRepResultAllRequiredParamConnection("Connection between replay result, "
 						+ XConceptExtension.instance().extractName(log) + ", and " + net.getLabel(), net, log, mapping,
@@ -104,12 +153,13 @@ public class AntiAlignmentPlugin {
 	}
 
 	public PNRepResult basicCodeStructureWithAlignments(Progress progress, Petrinet net, Marking initialMarking,
-			Marking finalMarking, XLog xLog, PNRepResult alignments, TransEvClassMapping mapping) {
+			Marking finalMarking, XLog xLog, PNRepResult alignments, TransEvClassMapping mapping,
+			AntiAlignmentParameters parameters) {
 
 		HeuristicAntiAlignmentAlgorithm algorithm = new HeuristicAntiAlignmentAlgorithm(net, initialMarking,
 				finalMarking, xLog, alignments, mapping);
 
-		AntiAlignments aa = algorithm.computeAntiAlignments(progress);
+		AntiAlignments aa = algorithm.computeAntiAlignments(progress, parameters);
 
 		AntiAlignmentValues values = algorithm.computePrecisionAndGeneralization(aa);
 

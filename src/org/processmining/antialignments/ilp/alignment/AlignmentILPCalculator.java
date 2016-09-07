@@ -611,34 +611,8 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 				alignmentCosts += costX;
 
 				// Compute the number of explained events
-				int l = updateListOfMoves(maxLengthX, vars, trace, startTraceAt, moves, false);
+				int l = updateListOfMoves(maxLengthX, vars, trace, startTraceAt, moves, true);
 				startTraceAt += l;
-
-				//				// Remove trailing model moves if progress was made
-				//				int removed = 0;
-				//				int move = moves.get(moves.size() - 1);
-				//				int varsX = spCols * maxLengthX;
-				//				while (l > 0 && ((move & NOMOVE) == NOMOVE)) {
-				//					// trailing model move
-				//					short t = (short) (move >>> 16);
-				//					if (VERBOSE) {
-				//						System.out.println("Removing: " + toPair(move));
-				//					}
-				//					if (trans2label[t] >= 0) {
-				//						// visible transition:
-				//						removed++;
-				//					}
-				//					alignmentCosts -= getCostForModelMove(t);
-				//					moves.removeAt(moves.size() - 1);
-				//					move = moves.get(moves.size() - 1);
-				//					for (int i = varsX; i-- > varsX - spCols;) {
-				//						vars[i] = 0;
-				//					}
-				//					vars[spCols * (maxLengthX - 1 - removed) + t] = 0;
-				//				}
-				//				if (VERBOSE && removed > 0) {
-				//					System.out.println(removed + " trailing model moves removed.");
-				//				}
 
 				// Get the intermediate Marking reached after the cutOffLength
 				Marking reachedMarkingX = getIntermediateMarking(marking, matrix, vars, false);
@@ -663,7 +637,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 						}
 					} else {
 						// add invisible steps to the list of moves and update alignmentCostsF
-						updateListOfMoves(maxLengthX, vars, trace, startTraceAt, moves, true);
+						updateMovesWithInvisiblesFromY(maxLengthX, vars, moves);
 						alignmentCosts += matrix.product(vars, spCols * maxLengthX, spCols * maxLengthX
 								+ invisibleTransitions, matrix.getNrows() - 1);
 
@@ -842,36 +816,76 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 	}
 
 	private int updateListOfMoves(int maxLengthX, double[] vars, short[] trace, int startTraceAt, TIntList moves,
-			boolean invisibleY) {
+			boolean ignoreTrailingModelMoves) {
 		int l = 0;
-		for (int c = invisibleY ? maxLengthX * spCols : 0; c < maxLengthX * spCols
-				+ (invisibleY ? invisibleTransitions : 0); c++) {
-			if (vars[c] > 0.5 || c % spCols < invisibleTransitions) {
-				if (c % spCols < transitions) {
-					int v = (int) (vars[c] + 0.5);
-					while (v > 0) {
-						//						moves.push(new Pair<>(short2trans[c % spCols], Short.MIN_VALUE));
-						moves.add(((c % spCols) << 16) | NOMOVE);
-						v--;
-					}
-				} else if (c % spCols < transitions + synchronousTransitions) {
-					assert (int) (vars[c] + 0.5) == 1;
-					int t = syncTransitionMap[(c % spCols) - transitions];
-					//					moves.push(new Pair<>(short2trans[t], syncLabelMap[(c % spCols) - transitions]));
+		TIntList tmpList = new TIntArrayList();
+		TIntList tmpVars = new TIntArrayList();
 
-					moves.add((t << 16) | syncLabelMap[(c % spCols) - transitions]);
-					assert trace[startTraceAt + l] == syncLabelMap[(c % spCols) - transitions];
-					l++;
-				} else {
-					//					moves.push(new Pair<>((Transition) null, traceWindow[(c % spCols) - transitions
-					//							- synchronousTransitions]));
-					moves.add(NOMOVE << 16 | traceWindow[(c % spCols) - transitions - synchronousTransitions]);
-					assert trace[startTraceAt + l] == traceWindow[(c % spCols) - transitions - synchronousTransitions];
-					l++;
+		for (int b = 0; b < maxLengthX; b++) {
+			int bl = 0;
+			for (int c = b * spCols; c < (b + 1) * spCols; c++) {
+				if (vars[c] > 0.5 || c % spCols < invisibleTransitions) {
+					tmpVars.add(c);
+					if (c % spCols < transitions) {
+						int v = (int) (vars[c] + 0.5);
+						while (v > 0) {
+							//						moves.push(new Pair<>(short2trans[c % spCols], Short.MIN_VALUE));
+							tmpList.add(((c % spCols) << 16) | NOMOVE);
+							v--;
+						}
+					} else if (c % spCols < transitions + synchronousTransitions) {
+						assert (int) (vars[c] + 0.5) == 1;
+						int t = syncTransitionMap[(c % spCols) - transitions];
+						//					moves.push(new Pair<>(short2trans[t], syncLabelMap[(c % spCols) - transitions]));
+
+						tmpList.add((t << 16) | syncLabelMap[(c % spCols) - transitions]);
+						assert trace[startTraceAt + l] == syncLabelMap[(c % spCols) - transitions];
+						bl++;
+					} else {
+						//					moves.push(new Pair<>((Transition) null, traceWindow[(c % spCols) - transitions
+						//							- synchronousTransitions]));
+						tmpList.add(NOMOVE << 16 | traceWindow[(c % spCols) - transitions - synchronousTransitions]);
+						assert trace[startTraceAt + l] == traceWindow[(c % spCols) - transitions
+								- synchronousTransitions];
+						bl++;
+					}
 				}
+			}
+			l += bl;
+			if (!ignoreTrailingModelMoves || bl > 0) {
+				// we are not ignoring trailing model moves and we found progress in the events
+				// purge the tempList into Moves
+				moves.addAll(tmpList);
+				tmpList.clear();
+				tmpVars.clear();
+			}
+		}
+		if (l == 0) {
+			// no progress at all, so purge the templist regardless of whether we ignore trailing
+			// model moves
+			moves.addAll(tmpList);
+		} else {
+			// remove trailing model moves by removing them from the variable set.
+			if (VERBOSE) {
+				System.out.println("Removing trailing model moves: " + tmpVars);
+			}
+			for (int i = 0; i < tmpVars.size(); i++) {
+				vars[tmpVars.get(i)] = 0;
 			}
 		}
 		return l;
+	}
+
+	private void updateMovesWithInvisiblesFromY(int maxLengthX, double[] vars, TIntList moves) {
+
+		for (int c = (maxLengthX + 1) * spCols; c < (maxLengthX + 1) * spCols + invisibleTransitions; c++) {
+			int v = (int) (vars[c] + 0.5);
+			while (v > 0) {
+				//						moves.push(new Pair<>(short2trans[c % spCols], Short.MIN_VALUE));
+				moves.add(((c % spCols) << 16) | NOMOVE);
+				v--;
+			}
+		}
 	}
 
 	public boolean checkAndReorderFiringSequence(TIntList moves, Marking initialMarking, Marking finalMarking,
@@ -945,7 +959,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 								+ t_i + " Checked:" + checked);
 					}
 					moves.removeAt(logMoveLocationStack[lPos]);
-					if (checked >= t_i) {
+					if (checked >= logMoveLocationStack[lPos]) {
 						checked--;
 					}
 

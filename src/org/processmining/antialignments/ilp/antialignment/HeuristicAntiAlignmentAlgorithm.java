@@ -57,15 +57,19 @@ public class HeuristicAntiAlignmentAlgorithm extends AbstractHeuristicILPReplaye
 		// Build the aligned event log for anti-alignment computations
 	}
 
-	public AntiAlignments computeAntiAlignments(Progress progress) {
+	public AntiAlignments computeAntiAlignments(Progress progress, AntiAlignmentParameters parameters) {
+		return computeAntiAlignments(progress, parameters.getCutOffLength(), parameters.getMaxFactor());
+
+	}
+
+	public AntiAlignments computeAntiAlignments(Progress progress, int cutOffLength, double maxFactor) {
 
 		if (progress != null) {
 			progress.setMaximum(log.length + 2);
 		}
 
 		// Start anti-alignment computation
-		int maxFactor = 1;
-		int max = maxTraceLength * 2 * maxFactor;
+		int max = (int) (maxTraceLength * 2 * maxFactor + 0.5);
 
 		AntiAlignmentILPCalculator calculator2 = null;
 		calculator2 = new AntiAlignmentILPCalculator(net, initialMarking, finalMarking, label2short, short2label,

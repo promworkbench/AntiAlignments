@@ -43,7 +43,7 @@ public class HeuristicParameterUI extends CostBasedCompleteUI {
 
 		// max modelMoves
 		modelMoves = slickerFactoryInstance.createNiceIntegerSlider(
-				"<html><h4># Expected maximal model move sequence.</h4></html>", 0, modelSize,
+				"<html><h4># Expected maximal model move sequence.</h4></html>", 0, 2 * modelSize,
 				Math.min(modelSize, MODELMOVES), Orientation.HORIZONTAL);
 		modelMoves.setPreferredSize(new Dimension(700, 20));
 		modelMoves.setMaximumSize(new Dimension(700, 20));

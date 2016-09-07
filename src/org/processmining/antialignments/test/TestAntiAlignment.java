@@ -12,9 +12,10 @@ import java.util.Iterator;
 import java.util.Set;
 
 import org.deckfour.xes.model.XLog;
-import org.processmining.antialignments.AntiAlignmentPlugin;
 import org.processmining.antialignments.bruteforce.DistanceMetric;
 import org.processmining.antialignments.ilp.AbstractILPCalculator;
+import org.processmining.antialignments.ilp.antialignment.AntiAlignmentParameters;
+import org.processmining.antialignments.ilp.antialignment.AntiAlignmentPlugin;
 import org.processmining.antialignments.ilp.util.AntiAlignments;
 import org.processmining.log.utils.XLogBuilder;
 import org.processmining.models.graphbased.directed.petrinet.Petrinet;
@@ -558,7 +559,7 @@ public class TestAntiAlignment {
 		PNRepResult alignments = alignmentAlgorithm.getAlignment(initialMarking, finalMarking, false);
 
 		return new AntiAlignmentPlugin().basicCodeStructureWithAlignments(null, net, initialMarking, finalMarking,
-				xLog, alignments, alignmentAlgorithm.mapping);
+				xLog, alignments, alignmentAlgorithm.mapping, new AntiAlignmentParameters(5, 1.0));
 
 	}
 }

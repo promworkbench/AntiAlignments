@@ -2,6 +2,9 @@ package org.processmining.antialignments.ilp.alignment;
 
 import gnu.trove.list.TIntList;
 
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -49,6 +52,7 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 	private static final String CUTOFF = "Cutoff sequence length";
 	private static final String MINEVENT = "Minimal events in cutoff sequence";
 	private static final String MINMODELMOVECOST = "Minimal model move cost";
+	private static final boolean EXPERIMENTING = false;
 
 	private Map<Transition, Integer> mapTrans2Cost;
 	private Map<XEventClass, Integer> mapEvClass2Cost;
@@ -58,14 +62,16 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 	public PNRepResult replayLog(PluginContext context, PetrinetGraph net, XLog xLog, TransEvClassMapping mapping,
 			IPNReplayParameter parameters) throws AStarException {
 
-		context.getProgress().setMaximum(xLog.size() + 1);
 		importParameters((HeuristicParameters) parameters);
 
 		setUpDataStructures((Petrinet) net, parameters.getInitialMarking(),
 				((HeuristicParameters) parameters).getFinalMarkings()[0], xLog, mapping);
 
+		context.getProgress().setMaximum(log.length + 1);
+
 		AlignmentILPCalculator calculator = new AlignmentILPCalculator(this.net, initialMarking, finalMarking,
 				label2short, short2label, mapping, log, mapTrans2Cost, mapEvClass2Cost, mapSync2Cost);
+
 		calculator.VERBOSE = false;
 		calculator.NAMES = false;
 
@@ -126,11 +132,112 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 		}
 		context.getProgress().inc();
 
+		PNRepResult result = null;
+		if (EXPERIMENTING) {
+			PrintStream out;
+			try {
+				out = new PrintStream(new File("d:/temp/antialignment/log.csv"));
+			} catch (FileNotFoundException e1) {
+				out = System.out;
+			}
+			String sep = ";";
+
+			printResult(out, null, sep);
+			for (int c = cutOffEvent; c-- > 1;) {
+				for (int e = 1; e <= c; e++) {
+					//c = calculator.getMinEvents() * (expectedModelMoves + 1)
+					result = computeAlignments(context, calculator, minCost, c, e);
+					printResult(out, result, sep);
+					//				System.out.println(result.getInfo());
+				}
+			}
+			out.close();
+		} else {
+			result = computeAlignments(context, calculator, minCost, cutOffEvent, minEvent);
+		}
+
+		long endWhole = System.currentTimeMillis();
+
+		result.addInfo(PNRepResult.VISTITLE, "Heuristic Alignments of "
+				+ XConceptExtension.instance().extractName(xLog) + " on " + net.getLabel());
+		result.addInfo(CBOUND, Integer.toString(cBound));
+		result.addInfo(RBOUND, Integer.toString(rBound));
+		result.addInfo(SOLVER, gurobi ? "Gurobi" : "LpSolve");
+		result.addInfo(TIME, Integer.toString((int) (endWhole - startWhole)));
+		result.addInfo(MINMODELMOVECOST, Double.toString(minCost));
+		return result;
+
+	}
+
+	private void printResult(PrintStream out, PNRepResult result, String sep) {
+		if (result == null) {
+			out.print("FirstTrace");
+			out.print(sep);
+			out.print("RepresentedCount");
+			out.print(sep);
+			out.print("XLength");
+			out.print(sep);
+			out.print("minEvent");
+			out.print(sep);
+			out.print("FitnessCost");
+			out.print(sep);
+			out.print("TotalFitnessCost");
+			out.print(sep);
+			out.print("MoveLogFitness");
+			out.print(sep);
+			out.print("MoveModelFitness");
+			out.print(sep);
+			out.print("SolveSteps");
+			out.print(sep);
+			out.print("TraceFitness");
+			out.print(sep);
+			out.print("Time");
+			out.print(sep);
+			out.print("OriginalTraceLength");
+			out.print(sep);
+			out.print("AlignmentLength");
+			out.println();
+
+		} else {
+			for (SyncReplayResult r : result) {
+				out.print(r.getTraceIndex().first());
+				out.print(sep);
+				out.print(r.getTraceIndex().size());
+				out.print(sep);
+				out.print(result.getInfo().get(CUTOFF));
+				out.print(sep);
+				out.print(result.getInfo().get(MINEVENT));
+				out.print(sep);
+				out.print(r.getInfo().get(PNRepResult.RAWFITNESSCOST));
+				out.print(sep);
+				out.print(r.getInfo().get(PNRepResult.RAWFITNESSCOST) * r.getTraceIndex().size());
+				out.print(sep);
+				out.print(r.getInfo().get(PNRepResult.MOVELOGFITNESS));
+				out.print(sep);
+				out.print(r.getInfo().get(PNRepResult.MOVEMODELFITNESS));
+				out.print(sep);
+				out.print(r.getInfo().get(PNRepResult.NUMSTATEGENERATED));
+				out.print(sep);
+				out.print(r.getInfo().get(PNRepResult.TRACEFITNESS));
+				out.print(sep);
+				out.print(r.getInfo().get(PNRepResult.TIME));
+				out.print(sep);
+				out.print(r.getInfo().get(PNRepResult.ORIGTRACELENGTH));
+				out.print(sep);
+				out.print(r.getStepTypes().size());
+				out.println();
+			}
+		}
+		out.flush();
+	}
+
+	public PNRepResult computeAlignments(PluginContext context, AlignmentILPCalculator calculator, double minCost,
+			int cutOffEvent, int minEvent) {
 		List<SyncReplayResult> results = new ArrayList<>(log.length);
 		for (int tr = 0; tr < log.length && !context.getProgress().isCancelled(); tr++) {
 			try {
 				calculator.setMinEvents(Math.min(minEvent, log[tr].length));
-				calculator.setCutOffLength(calculator.getMinEvents() * (expectedModelMoves + 1));
+				calculator.setCutOffLength(cutOffEvent);
 
 				//				calculator.setGurobi();
 				//				calculator.setMinEvents(5);
@@ -161,20 +268,12 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 			context.getProgress().inc();
 
 		}
-		long endWhole = System.currentTimeMillis();
 
 		PNRepResult result = new PNRepResult(results);
 
-		result.addInfo(CBOUND, Integer.toString(cBound));
-		result.addInfo(RBOUND, Integer.toString(rBound));
-		result.addInfo(SOLVER, gurobi ? "Gurobi" : "LpSolve");
-		result.addInfo(TIME, Integer.toString((int) (endWhole - startWhole)));
 		result.addInfo(EXPECTEDMOVES, Integer.toString(expectedModelMoves));
 		result.addInfo(CUTOFF, Integer.toString(cutOffEvent));
 		result.addInfo(MINEVENT, Integer.toString(minEvent));
-		result.addInfo(PNRepResult.VISTITLE, "Heuristic Alignments of "
-				+ XConceptExtension.instance().extractName(xLog) + " on " + net.getLabel());
-		result.addInfo(MINMODELMOVECOST, Double.toString(minCost));
 
 		return result;
 	}
@@ -243,7 +342,6 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 			info.put(PNRepResult.MOVEMODELFITNESS, 1.0);
 		}
 		info.put(PNRepResult.NUMSTATEGENERATED, (double) calculator.steps);
-		info.put(PNRepResult.QUEUEDSTATE, 0.0);
 
 		// set info fitness
 		if (mmCost > 0 || lmCost > 0 || smCost > 0) {

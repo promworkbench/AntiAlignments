@@ -35,13 +35,13 @@ import org.processmining.plugins.connectionfactories.logpetrinet.TransEvClassMap
 
 public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 
-	private final int maxFactor;
+	private final double maxFactor;
 
 	private final int maxLength;
 
 	public AntiAlignmentILPCalculator(Petrinet net, Marking initialMarking, Marking finalMarking,
 			TObjectShortMap<XEventClass> label2short, TShortObjectMap<XEventClass> short2label,
-			TransEvClassMapping mapping, short[][] log, int maxLength, int maxFactor) {
+			TransEvClassMapping mapping, short[][] log, int maxLength, double maxFactor) {
 
 		super(net, initialMarking, finalMarking, label2short, short2label, mapping, log);
 
@@ -472,11 +472,12 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 
 			for (int i = 0; i < exp; i++) {
 				firingSequence = new Stack<Transition>();
-				antiAlignment = new TShortArrayList(maxLength * maxFactor);
+				antiAlignment = new TShortArrayList((int) (maxLength * maxFactor + 0.5));
 				long start = System.currentTimeMillis();
 				//				solveByDrillingDown(2, maxLength * maxFactor, initialMarking, finalMarking, firingSequence,
 				//						antiAlignment, -1, 0);
-				solveSequential(maxLength * maxFactor, initialMarking, finalMarking, firingSequence, antiAlignment, -1);
+				solveSequential((int) (maxLength * maxFactor + 0.5), initialMarking, finalMarking, firingSequence,
+						antiAlignment, -1);
 				long end = System.currentTimeMillis();
 				assert checkFiringSequence(firingSequence, initialMarking, finalMarking);
 				sum += end - start;
@@ -508,7 +509,7 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 		}
 
 		Stack<Transition> firingSequence = new Stack<Transition>();
-		TShortList antiAlignment = new TShortArrayList(maxLength * maxFactor);
+		TShortList antiAlignment = new TShortArrayList((int) (maxLength * maxFactor + 0.5));
 		//		solveByDrillingDown(maxLength * maxFactor, initialMarking, finalMarking, firingSequence, antiAlignment, -1, 0);
 		long start = System.currentTimeMillis();
 		solveSequential(maxLength, initialMarking, finalMarking, firingSequence, antiAlignment, -1);
@@ -560,11 +561,12 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 				//			solveForFullSequence(lpMatrix, t, maxFactor * log[t].length, null, result);//, "D:/temp/antialignment/ilp_instance_t" + t + ".mps");
 
 			firingSequence = new Stack<Transition>();
-			antiAlignment = new TShortArrayList(maxLength * maxFactor);
+			antiAlignment = new TShortArrayList((int) (maxLength * maxFactor + 0.5));
 			//			solveByDrillingDown(maxFactor * log[t].length, initialMarking, finalMarking, firingSequence, antiAlignment,
 			//					t, 0);
 			start = System.currentTimeMillis();
-			solveSequential(maxFactor * log[t].length, initialMarking, finalMarking, firingSequence, antiAlignment, t);
+			solveSequential((int) (maxFactor * log[t].length + 0.5), initialMarking, finalMarking, firingSequence,
+					antiAlignment, t);
 			end = System.currentTimeMillis();
 			if (progress != null) {
 				progress.inc();
@@ -1321,14 +1323,12 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 		if (log.length == 0 || (log.length == 1 && traceToIgnore >= 0)) {
 			// a DLog is a 0-column. A positive weight would make the model unbounded.
 			lp.setObjective(transitions * (maxLengthX + 1), -1);
-			// maximize Drem in this case.
-			lp.setObjective(transitions * (maxLengthX + 1) + 1, (maxLengthX + maxLengthY));
 		} else {
 			// maximize Dlog
 			lp.setObjective(transitions * (maxLengthX + 1), (maxLengthX + maxLengthY) * (maxLengthX + maxLengthY));
-			// minimize Drem
-			lp.setObjective(transitions * (maxLengthX + 1) + 1, -(maxLengthX + maxLengthY));
 		}
+		// maximize Drem
+		lp.setObjective(transitions * (maxLengthX + 1) + 1, (maxLengthX + maxLengthY));
 
 		lp.setMaxim();
 
