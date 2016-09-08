@@ -158,7 +158,7 @@ public class AntiAlignmentPlugin {
 
 		HeuristicAntiAlignmentAlgorithm algorithm = new HeuristicAntiAlignmentAlgorithm(net, initialMarking,
 				finalMarking, xLog, alignments, mapping);
-
+		
 		AntiAlignments aa = algorithm.computeAntiAlignments(progress, parameters);
 
 		AntiAlignmentValues values = algorithm.computePrecisionAndGeneralization(aa);

@@ -25,7 +25,7 @@ public class HeuristicParameterProvider extends CostBasedCompleteParamProvider {
 			paramObj.setMaxNumOfStates(hui.getMaxNumOfStates());
 			paramObj.setInitialMarking(initMarking);
 			paramObj.setFinalMarkings(finalMarkings);
-			paramObj.setUsePartialOrderedEvents(hui.isUsePartialOrderedEvents());
+			//			paramObj.setUsePartialOrderedEvents(hui.isUsePartialOrderedEvents());
 
 			paramObj.setExpectedModelMoves(hui.getExpectedModelMoves());
 			paramObj.setBacktrackLimit(hui.getBacktrackLimit());

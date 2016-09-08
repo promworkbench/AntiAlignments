@@ -42,7 +42,7 @@ public class HeuristicAntiAlignmentAlgorithm extends AbstractHeuristicILPReplaye
 	private static final String LOGPRECISION = "Precision (log-based)";
 	private static final String LOGGENERALIZATION = "Generalization (log-based)";
 	private static final String TRACEPRECISION = "Precision (trace-based)";
-	private static final String TRACEGENERALIZATION = "Generalization (log-based)";
+	private static final String TRACEGENERALIZATION = "Generalization (trace-based)";
 	private static final String MAXLENGTH = "Parameter: Maximum length";
 	private static final String MAXFACTOR = "Parameter: Max Factor";
 
@@ -75,7 +75,7 @@ public class HeuristicAntiAlignmentAlgorithm extends AbstractHeuristicILPReplaye
 		int max = AntiAlignmentILPCalculator.getMaxLengthLog(maxTraceLength, maxFactor);
 
 		AntiAlignmentILPCalculator calculator2 = null;
-		AntiAlignmentILPCalculator.VERBOSE = false;
+		AntiAlignmentILPCalculator.VERBOSE = true;
 		calculator2 = new AntiAlignmentILPCalculator(net, initialMarking, finalMarking, label2short, short2label,
 				mapping, log, max, maxFactor);
 
@@ -207,12 +207,12 @@ public class HeuristicAntiAlignmentAlgorithm extends AbstractHeuristicILPReplaye
 			// * Math.max(0, aa.getAADistanceForLogWithoutTrace(t)
 			// - recDistances[t])
 			// / (double) aa.getMaxDistanceForTrace(t);
-			double d = Math.max(aa.getAAForLogWithoutTrace(t).length, log[t].length);
-			double aaDistance = d < 1 ? 1 : aa.getAADistanceForLogWithoutTrace(t) / d;
+			double aaDistance = aa.getAADistanceForLogWithoutTrace(t)
+					/ Math.max(aa.getAADistanceForLogWithoutTrace(t), log[t].length);
 			assert 0 <= aaDistance && aaDistance <= 1;
 			// double recDistance = newStateCounts[t] == 0 ? 0 : recDistances[t]
 			// / (double) (newStateCounts[t]);
-			d = (aa.getAAFiringSequenceForLogWithoutTrace(t).size() - 1);
+			double d = (aa.getAAFiringSequenceForLogWithoutTrace(t).size() - 1);
 			double recDistance = d < 1 ? 1 : recDistances[t] / d;
 			assert 0 <= recDistance && recDistance <= 1;
 
@@ -232,12 +232,11 @@ public class HeuristicAntiAlignmentAlgorithm extends AbstractHeuristicILPReplaye
 
 		}
 
-		double d = Math.max(aa.getAAForLog().length, maxTraceLength);
-		double aaDistance = d < 1 ? 1 : aa.getAADistanceForLog() / d;
+		double aaDistance = aa.getAADistanceForLog() / aa.getMaxDistanceForLog();
 		assert 0 <= aaDistance && aaDistance <= 1;
 		// double recDistance = newStateCounts[t] == 0 ? 0 : recDistances[t]
 		// / (double) (newStateCounts[t]);
-		d = aa.getAAFiringSequenceForLog().size() - 1;
+		double d = aa.getAAFiringSequenceForLog().size() - 1;
 		double recDistance = d < 1 ? 1 : recDistances[log.length] / d;
 		d = (1 - aaDistance) * (1 - aaDistance);
 		d += recDistance * recDistance;

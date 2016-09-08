@@ -45,7 +45,7 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 	}
 
 	public static int getMaxLengthRemovedTrace(short[] trace, double maxFactor) {
-		return (int) (trace.length * 2 * maxFactor + 0.5);
+		return (int) (trace.length * maxFactor + 0.5);
 	}
 
 	public AntiAlignmentILPCalculator(Petrinet net, Marking initialMarking, Marking finalMarking,
@@ -81,6 +81,10 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 		List<HybridEquationResult> splits = new ArrayList<HybridEquationResult>();
 		Marking marking = intermediate.getMarking();
 		splits.add(intermediate);
+
+		if (VERBOSE) {
+			System.out.println("------------------ NEXT TRACE ------------------");
+		}
 
 		do {
 			if (VERBOSE) {
@@ -208,7 +212,6 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 		} while (maxLengthY >= 0 && !intermediate.getMarking().equals(finalMarking));
 
 		if (!intermediate.getMarking().equals(finalMarking)) {
-			maxLengthY = 0;
 			if (VERBOSE) {
 				System.out.println("Trying to get from " + marking + " to " + finalMarking + " in "
 						+ (maxLengthX + maxLengthY) + " exact steps.");
@@ -218,6 +221,8 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 			intermediate = determineSplitMarkingForHybrid(matrix, maxLengthX + maxLengthY, startTracesAt, true,
 					antiAlignment, firingSequence, hammingDistances);
 			splits.add(intermediate);
+			maxLengthY = 0;
+
 		}
 
 		assert intermediate.getMarking().equals(finalMarking);
@@ -589,7 +594,7 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 			if (VERBOSE) {
 				System.out.println("-----------------------------------------------" + (t + 1) + " / " + log.length);
 				System.out.println("Removed Trace: " + toString(log[t]));
-				System.out.println("Maxlength: " + maxFactor * log[t].length);
+				System.out.println("Maxlength: " + getMaxLengthRemovedTrace(log[t], maxFactor));
 				System.out.flush();
 			} //			lp.setBasis(basis, true);
 				//			solveForFullSequence(lpMatrix, t, maxFactor * log[t].length, null, result);//, "D:/temp/antialignment/ilp_instance_t" + t + ".mps");
@@ -1371,8 +1376,13 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 		} else {
 			// maximize Dlog
 			lp.setObjective(transitions * (maxLengthX + 1), (maxLengthX + maxLengthY) * (maxLengthX + maxLengthY));
-			// ignore Drem
-			lp.setObjective(transitions * (maxLengthX + 1) + 1, 0);
+			if (traceToIgnore >= 0 && traceToIgnore < log.length) {
+				// maximize Drem
+				lp.setObjective(transitions * (maxLengthX + 1) + 1, (maxLengthX + maxLengthY));
+			} else {
+				// ignore Drem
+				lp.setObjective(transitions * (maxLengthX + 1) + 1, -1);
+			}
 		}
 
 		lp.setMaxim();
