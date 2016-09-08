@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Vector;
 
-import nl.tue.astar.util.LPMatrix.LPMatrixException;
+import nl.tue.astar.util.ilp.LPMatrixException;
 
 import org.deckfour.xes.classification.XEventClass;
 import org.deckfour.xes.extension.std.XConceptExtension;

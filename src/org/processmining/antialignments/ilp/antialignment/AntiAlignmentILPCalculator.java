@@ -13,8 +13,8 @@ import java.util.Stack;
 import java.util.Vector;
 
 import lpsolve.LpSolve;
-import nl.tue.astar.util.LPMatrix;
-import nl.tue.astar.util.LPMatrix.LPMatrixException;
+import nl.tue.astar.util.ilp.LPMatrix;
+import nl.tue.astar.util.ilp.LPMatrixException;
 
 import org.deckfour.xes.classification.XEventClass;
 import org.processmining.antialignments.ilp.AbstractILPCalculator;
@@ -703,7 +703,7 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 	}
 
 	protected LPMatrix<?> setupLpForFullSequence(int maxLength, boolean integerVariables, Marking initialMarking,
-			Marking finalMarking, int traceToIgnore, int startTracesAt) {
+			Marking finalMarking, int traceToIgnore, int startTracesAt) throws LPMatrixException {
 
 		//		LpSolve lp = LpSolve.makeLp((maxLength + 1) * places + 2 * maxLength + log.length, transitions * maxLength + 2);
 		LPMatrix<?> lp = setupMatrix((maxLength + 1) * places + 2 * maxLength + log.length, transitions * maxLength
@@ -743,7 +743,8 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 				lp.setRowName(r, "A" + block + "_" + p);
 				for (int c = t; c < block * transitions; c += transitions) {
 					// update the A matrix
-					lp.setMat(r, c, lp.getMat(r, c) + dir);
+					lp.adjustMat(r, c, dir);
+					//					lp.setMat(r, c, lp.getMat(r, c) + dir);
 				}
 
 				// Then, the  A- matrix.
@@ -754,7 +755,8 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 					lp.setUpbo(c, 1.0);
 					// update the A matrix only for consumption and for invisible transitions
 					// or in the last block
-					lp.setMat(r, c, lp.getMat(r, c) + dir);
+					lp.adjustMat(r, c, dir);
+					//					lp.setMat(r, c, lp.getMat(r, c) + dir);
 				}
 
 				// Then, in the last block
@@ -916,7 +918,8 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 	}
 
 	protected LPMatrix<?> setupLpForSplit(int maxLengthX, int maxLengthY, boolean integerVariables,
-			Marking initialMarking, Marking finalMarking, int traceToIgnore, int startTracesAt) {
+			Marking initialMarking, Marking finalMarking, int traceToIgnore, int startTracesAt)
+			throws LPMatrixException {
 
 		//		LpSolve lp = LpSolve.makeLp((maxLength + 1) * places + 2 * maxLength + log.length, transitions * maxLength + 2);
 		LPMatrix<?> lp = setupMatrix(2 * places + 2 * log.length + 3, transitions * 2 + 3);
@@ -950,11 +953,14 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 				continue;
 			}
 			// set up all the two A matrixes.
-			lp.setMat(p, t, lp.getMat(p, t) + dir);
+			lp.adjustMat(p, t, dir);
+			//			lp.setMat(p, t, lp.getMat(p, t) + dir);
 			if (maxLengthX > 1 || trans.isInvisible() || dir < 0) {
-				lp.setMat(p + places, t, lp.getMat(p + places, t) + dir);
+				lp.adjustMat(p + places, t, dir);
+				//				lp.setMat(p + places, t, lp.getMat(p + places, t) + dir);
 			}
-			lp.setMat(p, t + transitions, lp.getMat(p, t + transitions) + dir);
+			lp.adjustMat(p, t + transitions, dir);
+			//			lp.setMat(p, t + transitions, lp.getMat(p, t + transitions) + dir);
 
 			lp.setInt(t, integerVariables);
 			lp.setInt(t + transitions, integerVariables);
@@ -997,7 +1003,8 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 					for (short tr = 0; tr < trans2label.length; tr++) {
 						if (equalLabel(tr, log[t][e])) {
 							// add one to transition tr, labeled with log[t][e]
-							lp.setMat(row + 2 * t, tr, lp.getMat(row + 2 * t, tr) + 1);
+							lp.adjustMat(row + 2 * t, tr, 1);
+							//							lp.setMat(row + 2 * t, tr, lp.getMat(row + 2 * t, tr) + 1);
 						}
 					}
 				}
@@ -1093,7 +1100,7 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 	}
 
 	protected LPMatrix<?> setupLpForFinalInvisibleSteps(boolean integerVariables, Marking initialMarking,
-			Marking finalMarking) {
+			Marking finalMarking) throws LPMatrixException {
 
 		//		LpSolve lp = LpSolve.makeLp((maxLength + 1) * places + 2 * maxLength + log.length, transitions * maxLength + 2);
 		LPMatrix<?> lp = setupMatrix(places, invisibleTransitions);
@@ -1130,7 +1137,8 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 				continue;
 			}
 			// set up the A matrixes.
-			lp.setMat(p, t, lp.getMat(p, t) + dir);
+			lp.adjustMat(p, t, dir);
+			//			lp.setMat(p, t, lp.getMat(p, t) + dir);
 
 			lp.setInt(t, integerVariables);
 
@@ -1162,7 +1170,8 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 	}
 
 	protected LPMatrix<?> setupLpForHybrid(int maxLengthX, int maxLengthY, boolean integerVariables,
-			Marking initialMarking, Marking finalMarking, int traceToIgnore, int startTracesAt) {
+			Marking initialMarking, Marking finalMarking, int traceToIgnore, int startTracesAt)
+			throws LPMatrixException {
 
 		//-                            B    >= m0
 		//-                            AB   >= m0

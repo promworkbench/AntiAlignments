@@ -11,7 +11,8 @@ import gurobi.GRBEnv;
 import gurobi.GRBException;
 import lpsolve.LpSolve;
 import lpsolve.LpSolveException;
-import nl.tue.astar.util.LPMatrix;
+import nl.tue.astar.util.ilp.LPMatrix;
+import nl.tue.astar.util.ilp.LPMatrixException;
 
 import org.deckfour.xes.classification.XEventClass;
 import org.processmining.models.graphbased.directed.petrinet.Petrinet;
@@ -243,11 +244,11 @@ public abstract class AbstractILPCalculator {
 		return trans2label[transition] == event;
 	}
 
-	protected LPMatrix<?> setupMatrix(int rows, int columns) {
+	protected LPMatrix<?> setupMatrix(int rows, int columns) throws LPMatrixException {
 		if (mode == MODE_GUROBI) {
-			return new LPMatrix.GUROBI(gbEnv, rows, columns);
+			return new LPMatrix.SPARSE.GUROBI(gbEnv, rows, columns);
 		} else {
-			return new LPMatrix.LPSOLVE(rows, columns);
+			return new LPMatrix.SPARSE.LPSOLVE(rows, columns);
 		}
 	}
 

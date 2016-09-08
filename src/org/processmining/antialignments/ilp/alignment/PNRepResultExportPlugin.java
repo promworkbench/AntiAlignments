@@ -68,6 +68,8 @@ public class PNRepResultExportPlugin {
 			out.print("OriginalTraceLength");
 			out.print(sep);
 			out.print("AlignmentLength");
+			out.print(sep);
+			out.print("Reliable");
 			out.println();
 
 		} else {
@@ -99,10 +101,11 @@ public class PNRepResultExportPlugin {
 				out.print(r.getInfo().get(PNRepResult.ORIGTRACELENGTH));
 				out.print(sep);
 				out.print(r.getStepTypes().size());
+				out.print(sep);
+				out.print(Boolean.toString(r.isReliable()));
 				out.println();
 			}
 		}
 		out.flush();
 	}
-
 }

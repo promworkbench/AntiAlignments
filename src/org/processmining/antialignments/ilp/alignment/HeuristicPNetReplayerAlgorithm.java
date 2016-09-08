@@ -12,7 +12,7 @@ import java.util.Map;
 import java.util.Set;
 
 import nl.tue.astar.AStarException;
-import nl.tue.astar.util.LPMatrix.LPMatrixException;
+import nl.tue.astar.util.ilp.LPMatrixException;
 
 import org.deckfour.xes.classification.XEventClass;
 import org.deckfour.xes.classification.XEventClasses;
@@ -90,23 +90,25 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 				+ " labeled moves.");
 
 		long startWhole = System.currentTimeMillis();
-		double minCost;
-		try {
-			calculator.setCutOffLength(cutOffEvent);
-			calculator.setMinEvents(0);
-
-			context.log("Starting replay on the empty trace with " + cutOffEvent + " exact variables.");
-			TIntList moves = calculator.getAlignmentWithoutTrace(context.getProgress(), initialMarking, finalMarking);
-			minCost = calculator.getCost(moves, new short[0]);
-		} catch (LPMatrixException _) {
-			minCost = 0.0;
-		}
-		context.getProgress().inc();
 
 		PNRepResult result = null;
 		if (EXPERIMENTING) {
 			context.getProgress().setMaximum(
 					cutOffEvent * ((int) (Math.log(cutOffEvent) / Math.log(2) + 0.5)) * log.length + cutOffEvent);
+
+			double minCost;
+			try {
+				calculator.setCutOffLength(3);
+				calculator.setMinEvents(0);
+
+				context.log("Starting replay on the empty trace with " + cutOffEvent + " exact variables.");
+				TIntList moves = calculator.getAlignmentWithoutTrace(context.getProgress(), initialMarking,
+						finalMarking);
+				minCost = calculator.getCost(moves, new short[0]);
+			} catch (LPMatrixException _) {
+				minCost = 0.0;
+			}
+
 			PrintStream out;
 			try {
 				out = new PrintStream(new File("d:/temp/antialignment/log.csv"));
@@ -116,8 +118,10 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 			String sep = ";";
 			PNRepResultExportPlugin export = new PNRepResultExportPlugin();
 			export.printResult(out, null, sep);
-			for (int c = 15; c < cutOffEvent; c++) {
-				for (int e = 1; e < c; e *= 2) {
+			for (int c = 1; c < cutOffEvent; c++) {
+				result = computeAlignments(context, calculator, minCost, c, 0);
+				export.printResult(out, result, sep);
+				for (int e = 1; e < c; e++) {
 
 					switchToGurobi(context, calculator, c, e);
 
@@ -129,8 +133,24 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 			}
 			out.close();
 		} else {
+			double minCost;
+			try {
+				calculator.setCutOffLength(cutOffEvent);
+				calculator.setMinEvents(0);
+
+				context.log("Starting replay on the empty trace with " + cutOffEvent + " exact variables.");
+				TIntList moves = calculator.getAlignmentWithoutTrace(context.getProgress(), initialMarking,
+						finalMarking);
+				minCost = calculator.getCost(moves, new short[0]);
+			} catch (LPMatrixException _) {
+				minCost = 0.0;
+			}
+			context.getProgress().inc();
 			calculator.setGurobi();
+
 			result = computeAlignments(context, calculator, minCost, cutOffEvent, minEvent);
+
+			result.addInfo(MINMODELMOVECOST, Double.toString(minCost));
 		}
 
 		long endWhole = System.currentTimeMillis();
@@ -140,7 +160,6 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 		//		result.addInfo(CBOUND, Integer.toString(cBound));
 		//		result.addInfo(RBOUND, Integer.toString(rBound));
 		result.addInfo(TIME, Integer.toString((int) (endWhole - startWhole)));
-		result.addInfo(MINMODELMOVECOST, Double.toString(minCost));
 		return result;
 
 	}

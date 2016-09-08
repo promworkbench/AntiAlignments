@@ -13,8 +13,8 @@ import java.util.Arrays;
 import java.util.Map;
 
 import lpsolve.LpSolve;
-import nl.tue.astar.util.LPMatrix;
-import nl.tue.astar.util.LPMatrix.LPMatrixException;
+import nl.tue.astar.util.ilp.LPMatrix;
+import nl.tue.astar.util.ilp.LPMatrixException;
 
 import org.deckfour.xes.classification.XEventClass;
 import org.processmining.antialignments.ilp.AbstractILPCalculator;
@@ -171,7 +171,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 	}
 
 	protected LPMatrix<?> setupLpForHybrid(int maxLengthX, int minEvent, boolean integerVariables,
-			Marking initialMarking, Marking finalMarking, short[] trace, int startTraceAt) {
+			Marking initialMarking, Marking finalMarking, short[] trace, int startTraceAt) throws LPMatrixException {
 
 		// Find the transitions in the net labeled with an event in 
 		// log[traceToConsider][startTraceAt] .. log[traceToConsider][startTraceAt+lengthX-1]

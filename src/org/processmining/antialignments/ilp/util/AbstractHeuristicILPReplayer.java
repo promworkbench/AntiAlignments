@@ -51,7 +51,8 @@ public abstract class AbstractHeuristicILPReplayer<P extends PetrinetGraph> {
 		// Explicit constructor without parameters is essential for the use as a @PNReplayAlgorithm
 	}
 
-	public void setUpDataStructures(P net, Marking initialMarking, Marking finalMarking, XLog xLog, TransEvClassMapping mapping) {
+	public void setUpDataStructures(P net, Marking initialMarking, Marking finalMarking, XLog xLog,
+			TransEvClassMapping mapping) {
 
 		this.net = net;
 		this.initialMarking = initialMarking;
@@ -120,7 +121,8 @@ public abstract class AbstractHeuristicILPReplayer<P extends PetrinetGraph> {
 
 	}
 
-	public void setUpDataStructures(P net, Marking initialMarking, Marking finalMarking, XLog xLog, PNRepResult alignments, TransEvClassMapping mapping) {
+	public void setUpDataStructures(P net, Marking initialMarking, Marking finalMarking, XLog xLog,
+			PNRepResult alignments, TransEvClassMapping mapping) {
 
 		this.net = net;
 		this.initialMarking = initialMarking;
@@ -251,96 +253,4 @@ public abstract class AbstractHeuristicILPReplayer<P extends PetrinetGraph> {
 		return true;
 	}
 
-	//	private static int rebuildLogFromAlignments(PNRepResult alignments, TransEvClassMapping mapping,
-	//			TObjectIntMap<AlignedRepresentative> alignedTraces, TObjectShortMap<XEventClass> label2short,
-	//			TShortObjectMap<XEventClass> short2label) {
-	//		// move through alignments and rebuild event log to an aligned version with short labels.
-	//		// We need to build both an aligned log and aligned firing sequences. The latter includes
-	//		// invisible transitions which are required to compute the visited states later.
-	//
-	//		// What is needed here is a consistent mapping from labels in the log to shorts and 
-	//		// labels in the model to shorts. This mapping has been built internally by the replayer
-	//		// but is currently not accessible...
-	//		// Ugly, but map is from both XEventClass.toString() and Transition.getLabel() to short
-	//
-	//		// add all mapped objects first
-	//		short mapped = 1;
-	//		for (XEventClass ec : mapping.values()) {
-	//			label2short.put(ec, mapped);
-	//			short2label.put(mapped, ec);
-	//			mapped++;
-	//		}
-	//
-	//		int max = 0;
-	//		int i = 0;
-	//		for (SyncReplayResult alignment : alignments) {
-	//			//			frequencies[i] = alignment.getTraceIndex().size();
-	//
-	//			ArrayList<Transition> firingSeq = new ArrayList<Transition>();
-	//			//			firingSequences[i] = new ArrayList<Transition>();
-	//			TShortList modelSeq = new TShortArrayList();
-	//			for (int s = 0; s < alignment.getStepTypes().size(); s++) {
-	//				Transition t = null;
-	//				XEventClass c = null;
-	//				short m = label2short.getNoEntryValue();
-	//				if (alignment.getStepTypes().get(s) == StepTypes.LMGOOD) {
-	//					// synchronous move
-	//					// Corresponding nodeStep is a transition.
-	//					t = (Transition) alignment.getNodeInstance().get(s);
-	//					c = mapping.get(t);
-	//					m = label2short.get(mapping.get(t));
-	//				} else if (alignment.getStepTypes().get(s) == StepTypes.L) {
-	//					// log move
-	//					// Corresponding nodeStep is an event class.
-	//					c = (XEventClass) alignment.getNodeInstance().get(s);
-	//					if (label2short.get(c) == label2short.getNoEntryValue()) {
-	//						label2short.put(c, mapped);
-	//						short2label.put(mapped, c);
-	//						mapped++;
-	//					}
-	//				} else if (alignment.getStepTypes().get(s) == StepTypes.MREAL) {
-	//					// Model move on visible transition
-	//					// Corresponding nodeStep is a transition.
-	//					t = (Transition) alignment.getNodeInstance().get(s);
-	//					m = label2short.get(mapping.get(t));
-	//					if (m == label2short.getNoEntryValue()) {
-	//						label2short.put(mapping.get(t), mapped);
-	//						short2label.put(mapped, mapping.get(t));
-	//						m = mapped;
-	//						mapped++;
-	//					}
-	//				} else if (alignment.getStepTypes().get(s) == StepTypes.MINVI) {
-	//					// model move on invisible transition
-	//					// Corresponding nodeStep is a transition.
-	//					t = (Transition) alignment.getNodeInstance().get(s);
-	//					if (label2short.get(mapping.get(t)) == label2short.getNoEntryValue()) {
-	//						label2short.put(mapping.get(t), mapped);
-	//						short2label.put(mapped, mapping.get(t));
-	//						mapped++;
-	//					}
-	//				} else {
-	//					System.out.println("error");
-	//				}
-	//				if (t != null) {
-	//					firingSeq.add(t);
-	//
-	//					if (m != label2short.getNoEntryValue()) {
-	//						modelSeq.add(m);
-	//					}
-	//				}
-	//			}
-	//
-	//			AlignedRepresentative at = new AlignedRepresentative(modelSeq, firingSeq);
-	//			alignedTraces.adjustOrPutValue(at, alignment.getTraceIndex().size(), alignment.getTraceIndex().size());
-	//			//			alignedLog[i] = modelSeq.toArray();
-	//			if (modelSeq.size() > max) {
-	//				max = modelSeq.size();
-	//			}
-	//			i++;
-	//		}
-	//		// all elements are mapped to shorts and we have constructed the aligned log, both in terms of
-	//		// only mapped sync move elements and in terms of firing sequences.
-	//		return max;
-	//	}
-	//
 }
