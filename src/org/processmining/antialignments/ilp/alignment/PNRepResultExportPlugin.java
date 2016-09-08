@@ -51,6 +51,10 @@ public class PNRepResultExportPlugin {
 			out.print(sep);
 			out.print("minEvent");
 			out.print(sep);
+			out.print("BacktrackBound");
+			out.print(sep);
+			out.print("BacktrackThreshold");
+			out.print(sep);
 			out.print("FitnessCost");
 			out.print(sep);
 			out.print("TotalFitnessCost");
@@ -83,6 +87,10 @@ public class PNRepResultExportPlugin {
 				out.print(result.getInfo().get(HeuristicPNetReplayerAlgorithm.CUTOFF));
 				out.print(sep);
 				out.print(result.getInfo().get(HeuristicPNetReplayerAlgorithm.MINEVENT));
+				out.print(sep);
+				out.print(result.getInfo().get(HeuristicPNetReplayerAlgorithm.BACKTRACKBOUND));
+				out.print(sep);
+				out.print(result.getInfo().get(HeuristicPNetReplayerAlgorithm.BACKTRACKTHRESHOLD));
 				out.print(sep);
 				out.print(r.getInfo().get(PNRepResult.RAWFITNESSCOST));
 				out.print(sep);

@@ -517,7 +517,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 		return logMoveCost[label];
 	}
 
-	private double getCostForSync(short t, short s) {
+	private double getCostForSync(short t, short l) {
 		return syncMoveCost[t];
 	}
 
@@ -615,7 +615,8 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 			double[] vars = new double[matrix.getNcolumns()];
 			long mid = System.currentTimeMillis();
 
-			HybridEquationResult nextResult = determineSplitMarkingForHybrid(matrix, vars, trace, maxLengthX);
+			HybridEquationResult nextResult = determineSplitMarkingForHybrid(matrix, vars, trace, maxLengthX,
+					backTrackDepth == 0);
 			//			int result = matrix.solve(vars);
 			steps++;
 
@@ -623,10 +624,16 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 				if (VERBOSE) {
 					System.err.println("Infeasibility detected, exception...");
 				}
+				try {
+					matrix.printLpToCSV("d:/temp/antialignment/infeasibleLP.csv");
+				} catch (IOException e) {
+
+				}
 				//TODO: EXCEPTION
 				assert false;
 
 			} else if (backTrackDepth < maxBackTrackDepth //- We can still backtrack
+					&& intermediate.getLengthY() > 0 //- expected optimal match. Not found, hence does not exist.
 					&& nextResult.getLengthY() > 0 //- there's something in Y, so no optimal solution found
 					&& (nextResult.getLengthX() + nextResult.getLengthY() > //- over backtracking threshold
 					/*                            */intermediate.getLengthY() * backtrackThreshold && startTraceAt > 0)) {
@@ -635,34 +642,32 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 				// nextResult did not live up to its expectations. 
 				// go back one step.
 				if (VERBOSE) {
-					System.out.println("Backtracking since " + (nextResult.getLengthX() + nextResult.getLengthY())
-							+ " > " + backtrackThreshold * intermediate.getLengthY());
+					System.out.println("Backtracking from " + nextResult.getMarking() + " since "
+							+ (nextResult.getLengthX() + nextResult.getLengthY()) + " > " + backtrackThreshold
+							* intermediate.getLengthY());
 					assert checkAndReorderFiringSequence(moves, initialMarking, intermediate.getMarking(), false);
 					assert checkTrace(moves, trace, false);
 				}
 				// undo last synchronous step in the alignment.
-				boolean stop = false;
-				int m_i = moves.size();
-				do {
-					m_i--;
-					int move = moves.get(m_i);
-					short t = splitT(move);
-					short l = splitL(move);
-					if (t == NOMOVE) {
-						// logMove
-						startTraceAt--;
-						stop = true;
-					} else if (l == NOMOVE) {
-						// modelMove
-						unfire(short2trans[t], intermediate.getMarking());
-					} else {
-						// sync move
-						unfire(short2trans[t], intermediate.getMarking());
-						startTraceAt--;
-						stop = true;
-					}
-					moves.removeAt(m_i);
-				} while (!stop && m_i > 0);
+				int m_i = moves.size() - 1;
+				int move = moves.get(m_i);
+				short t = splitT(move);
+				short l = splitL(move);
+				if (t == NOMOVE) {
+					// logMove
+					alignmentCosts -= getCostForLogMove(l);
+					startTraceAt--;
+				} else if (l == NOMOVE) {
+					// modelMove
+					alignmentCosts -= getCostForModelMove(t);
+					unfire(short2trans[t], intermediate.getMarking());
+				} else {
+					alignmentCosts -= getCostForSync(t, l);
+					// sync move
+					unfire(short2trans[t], intermediate.getMarking());
+					startTraceAt--;
+				}
+				moves.removeAt(m_i);
 
 				if (VERBOSE) {
 					System.out.println("T: " + printTrace(trace));
@@ -687,9 +692,8 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 				//				double costX = matrix.product(vars, 0, spCols * maxLengthX, alignmentCostRow);
 				//				double costY = matrix.product(vars, spCols * maxLengthX, vars.length, matrix.getNrows() - 1);
 				alignmentCosts += nextResult.getLengthX();
-
 				// Compute the number of explained events
-				int l = updateListOfMoves(maxLengthX, vars, trace, startTraceAt, moves, true);
+				int l = updateListOfMoves(maxLengthX, vars, trace, startTraceAt, moves, backTrackDepth == 0);
 
 				// Get the intermediate Marking reached after the cutOffLength
 				nextResult
@@ -744,6 +748,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 					// Copy the remaining log Moves.
 					for (int e = startTraceAt; e < trace.length; e++) {
 						moves.add(NOMOVE << 16 | trace[e]);
+						alignmentCosts += getCostForLogMove(trace[e]);
 					}
 
 				}
@@ -786,15 +791,36 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 	}
 
 	protected HybridEquationResult determineSplitMarkingForHybrid(LPMatrix<?> matrix, double[] vars, short[] trace,
-			int maxLengthX) throws LPMatrixException {
+			int maxLengthX, boolean removeTrailingModelMoves) throws LPMatrixException {
 
 		int result = matrix.solve(vars);
 
 		if (result == LPMatrix.OPTIMAL) {
 
+			int costX = 0;
+			int costTrailModelMoves = 0;
+			boolean onlyModelMove = true;
 			// Update the alignment costs
-			int costX = (int) (matrix.product(vars, 0, spCols * maxLengthX, alignmentCostRow) + 0.5);
+			for (int c = 0; c < spCols * maxLengthX; c++) {
+				if (vars[c] > 0) {
+					int cost_c = (int) (vars[c] * matrix.getMat(alignmentCostRow, c) + 0.5);
+					costX += cost_c;
+					if (c % spCols < transitions) {
+						// Trailing modelMove, to be removed later
+						costTrailModelMoves += cost_c;
+					} else {
+						// log or sync move, reset trailing model move cost
+						costTrailModelMoves = 0;
+						onlyModelMove = false;
+					}
+				}
+			}
 			int costY = (int) (matrix.product(vars, spCols * maxLengthX, vars.length, alignmentCostRow) + 0.5);
+			if (removeTrailingModelMoves && !onlyModelMove) {
+				// remove the cost of trailing moves if there were other moves and move them from X to Y.
+				costX -= costTrailModelMoves;
+				costY += costTrailModelMoves;
+			}
 
 			return new HybridEquationResult(costX, costY);
 		} else {
@@ -822,16 +848,21 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 	protected Marking getIntermediateMarking(Marking marking, int maxLengthX, LPMatrix<?> matrix, double[] vars,
 			boolean invisibleY) {
 		Marking newMarking = new Marking(marking);
+		int[] effect = new int[places];
 		for (short p = 0; p < places; p++) {
 			// compute the effect of the x vectors on place p.
 			double v = matrix.product(vars, invisibleY ? maxLengthX * spCols : 0, maxLengthX * spCols
 					+ (invisibleY ? invisibleTransitions : 0), maxLengthX * spRows + p);
-			while (v < -.5) {
-				newMarking.remove(short2place[p]);
-				v += 1.0;
-			}
-			if (v > 0) {
+			if (v < 0) {
+				effect[p] += (int) (v - 0.5);
+			} else if (v > 0) {
 				newMarking.add(short2place[p], (int) (v + .5));
+			}
+		}
+		for (short p = 0; p < places; p++) {
+			while (effect[p] < 0) {
+				newMarking.remove(short2place[p]);
+				effect[p]++;
 			}
 		}
 		return newMarking;
@@ -892,6 +923,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 		}
 		System.out.println();
 		System.out.println("Cost of alignment: " + cost);
+		assert cost == alignmentCosts;
 		System.out.println("Max sequences: MM: " + mmSeqMax + ", LM: " + lmSeqMax + ", SM: " + smSeqMax);
 	}
 

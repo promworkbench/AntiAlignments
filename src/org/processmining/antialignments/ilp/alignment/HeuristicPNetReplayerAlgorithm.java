@@ -47,8 +47,12 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 	static final String SOLVER = "ILP Solver";
 	static final String TIME = "Total time (ms)";
 	static final String EXPECTEDMOVES = "User expected model moves";
-	static final String CUTOFF = "Cutoff sequence length";
-	static final String MINEVENT = "Minimal events in cutoff sequence";
+
+	static final String CUTOFF = "Parameter: window size";
+	static final String MINEVENT = "Parameter: Minimal events in window";
+	static final String BACKTRACKBOUND = "Parameter: Backtrack bound";
+	static final String BACKTRACKTHRESHOLD = "Parameter: Backtrack threshold";
+
 	static final String MINMODELMOVECOST = "Minimal model move cost";
 
 	private static final boolean EXPERIMENTING = false;
@@ -77,6 +81,7 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 		calculator.setBacktrackLimit(backtrackLimit);
 		calculator.setBacktrackThreshold(backtrackThreshold);
 
+		//DEBUGCODE
 		calculator.VERBOSE = false;
 		calculator.NAMES = false;
 
@@ -122,12 +127,13 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 				result = computeAlignments(context, calculator, minCost, c, 0);
 				export.printResult(out, result, sep);
 				for (int e = 1; e < c; e++) {
-
+					System.out.print(".");
 					switchToGurobi(context, calculator, c, e);
 
 					result = computeAlignments(context, calculator, minCost, c, e);
 					export.printResult(out, result, sep);
 				}
+				System.out.println(".");
 				result = computeAlignments(context, calculator, minCost, c, c);
 				export.printResult(out, result, sep);
 			}
@@ -168,8 +174,10 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 			int minEvent) {
 		calculator.setLPSolve();
 		boolean gurobi = false;
-		int cBound = 500;
-		int rBound = 800;
+
+		//DEBUGCODE
+		int cBound = 250;
+		int rBound = 250;
 
 		// estimate number of columns and rows (This is not exact!)
 		int columns = (net.getTransitions().size() + 2 * minEvent) * cutOffEvent + 2 * net.getTransitions().size()
@@ -249,6 +257,8 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 		result.addInfo(EXPECTEDMOVES, Integer.toString(expectedModelMoves));
 		result.addInfo(CUTOFF, Integer.toString(cutOffEvent));
 		result.addInfo(MINEVENT, Integer.toString(minEvent));
+		result.addInfo(BACKTRACKBOUND, Integer.toString(backtrackLimit));
+		result.addInfo(BACKTRACKTHRESHOLD, Double.toString(backtrackThreshold));
 		result.addInfo(SOLVER, calculator.isGurobi() ? "Gurobi" : "LpSolve");
 
 		return result;
