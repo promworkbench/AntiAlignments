@@ -682,7 +682,7 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 			lpMatrix.setMat(row, lpMatrix.getNcolumns() - 2, 0);
 			// minus g for the removed trace.
 			lpMatrix.setMat(row, lpMatrix.getNcolumns() - 1, -1);
-			lpMatrix.setConstrType(row, LpSolve.EQ);
+			lpMatrix.setConstrType(row, LPMatrix.EQ);
 		}
 		lpMatrix.setRh(lpMatrix.getNrows() - 1, maxLength);
 
@@ -695,7 +695,7 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 				lpMatrix.setMat(row, lpMatrix.getNcolumns() - 2, -1);
 				// ignore g.
 				lpMatrix.setMat(row, lpMatrix.getNcolumns() - 1, 0);
-				lpMatrix.setConstrType(row, LpSolve.GE);
+				lpMatrix.setConstrType(row, LPMatrix.GE);
 			}
 		}
 		return result;
@@ -712,7 +712,7 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 		for (PetrinetEdge<? extends PetrinetNode, ? extends PetrinetNode> e : net.getEdges()) {
 			short p, t;
 			int dir;
-			int type = LpSolve.GE;
+			byte type = LPMatrix.GE;
 			Transition trans;
 			if (e instanceof Arc) {
 				if (e.getSource() instanceof Place) {
@@ -731,7 +731,7 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 				trans = (Transition) e.getTarget();
 				t = trans2short.get(trans);
 				dir = 0;
-				type = LpSolve.EQ;
+				type = LPMatrix.EQ;
 			} else {
 				continue;
 			}
@@ -761,7 +761,7 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 
 				// Then, in the last block
 				if (block == maxLength) {
-					lp.setConstrType(r, LpSolve.EQ);
+					lp.setConstrType(r, LPMatrix.EQ);
 					if (trans.isInvisible()) {
 						// Also add invisible columns to the end.
 						lp.setMat(r, c, lp.getMat(r, c) + dir);
@@ -782,7 +782,7 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 				lp.setMat(row + i, t, trans2label[t % transitions] < 0 ? 0 : -1);
 			}
 			lp.setRowName(row + i, "X" + i + "X" + (i + 1));
-			lp.setConstrType(row + i, LpSolve.GE);
+			lp.setConstrType(row + i, LPMatrix.GE);
 		}
 
 		// sos constraints, sum max 1
@@ -792,7 +792,7 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 				lp.setMat(row + i, t, trans2label[t % transitions] < 0 ? 0 : 1);
 			}
 			lp.setRowName(row + i, "X" + i + ".1");
-			lp.setConstrType(row + i, LpSolve.LE);
+			lp.setConstrType(row + i, LPMatrix.LE);
 		}
 
 		row = places * (maxLength + 1) + 2 * maxLength - 1;
@@ -823,11 +823,11 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 			if (t == traceToIgnore) {
 				// minus g for the removed trace.
 				lp.setMat(row + t, transitions * maxLength + invisibleTransitions + 1, -1);
-				lp.setConstrType(row + t, LpSolve.EQ);
+				lp.setConstrType(row + t, LPMatrix.EQ);
 			} else {
 				// minus h
 				lp.setMat(row + t, transitions * maxLength + invisibleTransitions, -1);
-				lp.setConstrType(row + t, LpSolve.GE);
+				lp.setConstrType(row + t, LPMatrix.GE);
 			}
 		}
 
@@ -841,7 +841,7 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 			lp.setObjective(t, trans2label[t % transitions] < 0 ? -.1 : .2);
 		}
 		lp.setRowName(row, "SumX");
-		lp.setConstrType(row, LpSolve.LE);
+		lp.setConstrType(row, LPMatrix.LE);
 
 		// maximize h = minimal distance to the log
 		lp.setInt(transitions * maxLength + invisibleTransitions, integerVariables);
@@ -973,8 +973,8 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 			lp.setRowName(p, (maxLengthX == 1 ? "B1" : "A1") + p);
 			lp.setRowName(p + places, "A2" + p);
 
-			lp.setConstrType(p, LpSolve.EQ);
-			lp.setConstrType(p + places, LpSolve.GE);
+			lp.setConstrType(p, LPMatrix.EQ);
+			lp.setConstrType(p + places, LPMatrix.GE);
 
 			if (!trans.isInvisible()) {
 				lp.setMat(2 * places, t, 1);
@@ -987,9 +987,9 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 
 		}
 		// The length of the X vector is equal to half the maxLength
-		lp.setConstrType(2 * places, LpSolve.EQ);
+		lp.setConstrType(2 * places, LPMatrix.EQ);
 		// The remainder is the Y vector
-		lp.setConstrType(2 * places + 1, LpSolve.LE);
+		lp.setConstrType(2 * places + 1, LPMatrix.LE);
 
 		int row = 2 * places + 2;
 
@@ -1149,7 +1149,7 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 
 			lp.setRowName(p, "A" + p);
 
-			lp.setConstrType(p, LpSolve.EQ);
+			lp.setConstrType(p, LPMatrix.EQ);
 
 		}
 
@@ -1234,7 +1234,7 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 			if (NAMES) {
 				lp.setRowName(row + i, "X" + i + "~X" + (i + 1));
 			}
-			lp.setConstrType(row + i, LpSolve.GE);
+			lp.setConstrType(row + i, LPMatrix.GE);
 		}
 
 		// sos constraints, sum max 1
@@ -1246,7 +1246,7 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 			if (NAMES) {
 				lp.setRowName(row + i, "X" + i + ".1");
 			}
-			lp.setConstrType(row + i, LpSolve.LE);
+			lp.setConstrType(row + i, LPMatrix.LE);
 		}
 
 		row += maxLengthX;
@@ -1257,7 +1257,7 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 		if (NAMES) {
 			lp.setRowName(row, "Y.1");
 		}
-		lp.setConstrType(row, LpSolve.LE);
+		lp.setConstrType(row, LPMatrix.LE);
 
 		row++;
 		// setup Y only if X_{lengthX}.1==1;
@@ -1268,7 +1268,7 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 		if (NAMES) {
 			lp.setRowName(row, "Y~X_l");
 		}
-		lp.setConstrType(row, LpSolve.LE);
+		lp.setConstrType(row, LPMatrix.LE);
 
 		double maxOccInY = 0;
 		//Hamming distances for the X and Y vectors
@@ -1305,11 +1305,11 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 					if (t == traceToIgnore) {
 						// minus HD for the removes trace
 						lp.setMat(row + t, transitions * (maxLengthX + 1) + 1, -1);
-						lp.setConstrType(row + t, LpSolve.EQ);
+						lp.setConstrType(row + t, LPMatrix.EQ);
 					} else {
 						// minus HX
 						lp.setMat(row + t, transitions * (maxLengthX + 1), -1);
-						lp.setConstrType(row + t, LpSolve.GE);
+						lp.setConstrType(row + t, LPMatrix.GE);
 					}
 
 				}

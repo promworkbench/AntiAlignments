@@ -12,7 +12,6 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Map;
 
-import lpsolve.LpSolve;
 import nl.tue.astar.util.ilp.LPMatrix;
 import nl.tue.astar.util.ilp.LPMatrixException;
 
@@ -407,7 +406,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 			if (NAMES) {
 				lp.setRowName(row + i, "X" + i + "_X" + (i + 1));
 			}
-			lp.setConstrType(row + i, LpSolve.GE);
+			lp.setConstrType(row + i, LPMatrix.GE);
 		}
 		row += maxLengthX - 1;
 
@@ -423,7 +422,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 		if (NAMES) {
 			lp.setRowName(row, "X" + (maxLengthX - 1) + "_Y");
 		}
-		lp.setConstrType(row, LpSolve.GE);
+		lp.setConstrType(row, LPMatrix.GE);
 
 		row++;
 
@@ -437,7 +436,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 		if (NAMES) {
 			lp.setRowName(row, "EVTS_" + minEvent);
 		}
-		lp.setConstrType(row, LpSolve.GE);
+		lp.setConstrType(row, LPMatrix.GE);
 		row++;
 
 		// sos constraints, sum max 1
@@ -448,7 +447,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 			if (NAMES) {
 				lp.setRowName(row + i, "X" + i + ".1");
 			}
-			lp.setConstrType(row + i, LpSolve.LE);
+			lp.setConstrType(row + i, LPMatrix.LE);
 		}
 
 		//		row += maxLengthX;
