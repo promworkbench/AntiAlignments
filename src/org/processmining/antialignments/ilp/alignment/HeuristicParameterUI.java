@@ -35,8 +35,8 @@ public class HeuristicParameterUI extends CostBasedCompleteUI {
 			Map<XEventClass, Integer> defMoveLogCost, int modelSize) {
 		super(new double[][] {
 				{ TableLayoutConstants.FILL },
-				{ 80, 40, 40, 40, TableLayoutConstants.FILL, 35, TableLayoutConstants.FILL, 30,
-						TableLayoutConstants.FILL, 30 } });
+				{ 80, 40, 40, 40, TableLayoutConstants.FILL, 35, TableLayoutConstants.FILL, 35,
+						TableLayoutConstants.FILL, 35 } });
 
 		SlickerFactory slickerFactoryInstance = SlickerFactory.instance();
 		setTitle(
