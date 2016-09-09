@@ -61,9 +61,9 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 	private Map<XEventClass, Integer> mapEvClass2Cost;
 	private Map<Transition, Integer> mapSync2Cost;
 
-	private int expectedModelMoves;
-	private int backtrackLimit;
-	private double backtrackThreshold;
+	private int expectedModelMovesParameter;
+	private int backtrackLimitParameter;
+	private double backtrackThresholdParameter;
 
 	public PNRepResult replayLog(PluginContext context, PetrinetGraph net, XLog xLog, TransEvClassMapping mapping,
 			IPNReplayParameter parameters) throws AStarException {
@@ -78,15 +78,12 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 		AlignmentILPCalculator calculator = new AlignmentILPCalculator(this.net, initialMarking, finalMarking,
 				label2short, short2label, mapping, log, mapTrans2Cost, mapEvClass2Cost, mapSync2Cost);
 
-		calculator.setBacktrackLimit(backtrackLimit);
-		calculator.setBacktrackThreshold(backtrackThreshold);
-
 		//DEBUGCODE
 		calculator.VERBOSE = false;
 		calculator.NAMES = false;
 
 		// Set parameters just over the bounds for the ILP's
-		int cutOffEvent = expectedModelMoves + 1;
+		int cutOffEvent = expectedModelMovesParameter + 1;
 		int minEvent = 1;
 
 		switchToGurobi(context, calculator, cutOffEvent, minEvent);
@@ -123,19 +120,22 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 			String sep = ";";
 			PNRepResultExportPlugin export = new PNRepResultExportPlugin();
 			export.printResult(out, null, sep);
-			for (int c = 1; c < cutOffEvent; c++) {
-				result = computeAlignments(context, calculator, minCost, c, 0);
-				export.printResult(out, result, sep);
-				for (int e = 1; e < c; e++) {
-					System.out.print(".");
-					switchToGurobi(context, calculator, c, e);
+			switchToGurobi(context, calculator, cutOffEvent, minEvent);
 
-					result = computeAlignments(context, calculator, minCost, c, e);
+			for (int c = 1; c < cutOffEvent; c++) {
+				for (int b = 1; b <= c; b++) {
+					result = computeAlignments(context, calculator, minCost, c, 0, b, backtrackThresholdParameter);
+					export.printResult(out, result, sep);
+					for (int e = 1; e < c; e = (int) (1.5 * e + 0.5)) {
+						System.out.print(".");
+
+						result = computeAlignments(context, calculator, minCost, c, e, b, backtrackThresholdParameter);
+						export.printResult(out, result, sep);
+					}
+					System.out.println(".");
+					result = computeAlignments(context, calculator, minCost, c, c, b, backtrackThresholdParameter);
 					export.printResult(out, result, sep);
 				}
-				System.out.println(".");
-				result = computeAlignments(context, calculator, minCost, c, c);
-				export.printResult(out, result, sep);
 			}
 			out.close();
 		} else {
@@ -154,7 +154,8 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 			context.getProgress().inc();
 			calculator.setGurobi();
 
-			result = computeAlignments(context, calculator, minCost, cutOffEvent, minEvent);
+			result = computeAlignments(context, calculator, minCost, cutOffEvent, minEvent, backtrackLimitParameter,
+					backtrackThresholdParameter);
 
 			result.addInfo(MINMODELMOVECOST, Double.toString(minCost));
 		}
@@ -195,7 +196,7 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 		//		}
 
 		// But what if that fails?
-		if (columns > cBound || rows > rBound) {
+		if (columns > cBound || rows > rBound || EXPERIMENTING) {
 			// Try to setup Gurobi?
 			if (calculator.setGurobi()) {
 				gurobi = true;
@@ -204,7 +205,7 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 				context.log("Failed to load Gurobi...");
 				// cannot setup gurobi. Nothing we can do, but resort to smallest case.
 				minEvent = 1;
-				cutOffEvent = 1 + expectedModelMoves;
+				cutOffEvent = 1 + expectedModelMovesParameter;
 			}
 
 		}
@@ -214,13 +215,15 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 	}
 
 	public PNRepResult computeAlignments(PluginContext context, AlignmentILPCalculator calculator, double minCost,
-			int cutOffEvent, int minEvent) {
+			int cutOffEvent, int minEvent, int backtrackLimit, double backtrackThreshold) {
 		List<SyncReplayResult> results = new ArrayList<>(log.length);
 		for (int tr = 0; tr < log.length && !context.getProgress().isCancelled(); tr++) {
 			//		for (int tr = log.length; tr-- > 0 && !context.getProgress().isCancelled();) {
 			try {
 				calculator.setMinEvents(Math.min(minEvent, log[tr].length));
 				calculator.setCutOffLength(cutOffEvent);
+				calculator.setBacktrackLimit(backtrackLimit);
+				calculator.setBacktrackThreshold(backtrackThreshold);
 
 				//				calculator.setGurobi();
 				//				calculator.setMinEvents(5);
@@ -254,7 +257,7 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 
 		PNRepResult result = new PNRepResult(results);
 
-		result.addInfo(EXPECTEDMOVES, Integer.toString(expectedModelMoves));
+		result.addInfo(EXPECTEDMOVES, Integer.toString(expectedModelMovesParameter));
 		result.addInfo(CUTOFF, Integer.toString(cutOffEvent));
 		result.addInfo(MINEVENT, Integer.toString(minEvent));
 		result.addInfo(BACKTRACKBOUND, Integer.toString(backtrackLimit));
@@ -447,9 +450,9 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 		mapEvClass2Cost = parameters.getMapEvClass2Cost();
 		mapSync2Cost = parameters.getMapSync2Cost();
 
-		expectedModelMoves = parameters.getExpecteModelMoves();
-		backtrackLimit = parameters.getBacktrackLimit();
-		backtrackThreshold = parameters.getBacktrackThreshold();
+		expectedModelMovesParameter = parameters.getExpecteModelMoves();
+		backtrackLimitParameter = parameters.getBacktrackLimit();
+		backtrackThresholdParameter = parameters.getBacktrackThreshold();
 	}
 
 }
