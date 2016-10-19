@@ -30,6 +30,7 @@ import org.processmining.models.semantics.petrinet.PetrinetSemantics;
 import org.processmining.models.semantics.petrinet.impl.PetrinetSemanticsFactory;
 import org.processmining.plugins.connectionfactories.logpetrinet.TransEvClassMapping;
 import org.processmining.plugins.petrinet.replayresult.PNRepResult;
+import org.processmining.plugins.petrinet.replayresult.PNRepResultImpl;
 import org.processmining.plugins.petrinet.replayresult.StepTypes;
 import org.processmining.plugins.replayer.replayresult.SyncReplayResult;
 
@@ -173,7 +174,7 @@ public class HeuristicAntiAlignmentAlgorithm extends AbstractHeuristicILPReplaye
 
 			}
 		}
-		PNRepResult res = new PNRepResult(collection);
+		PNRepResultImpl res = new PNRepResultImpl(collection);
 
 		res.addInfo(MAXFACTOR, Double.toString(parameters.getMaxFactor()));
 		res.addInfo(

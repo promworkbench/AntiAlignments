@@ -252,7 +252,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 			for (short t = 0; t < transitions; t++) {
 				int col = block * spCols + t;
 				// Set Objective
-				lp.setObjective(col, getCostForModelMove(t));
+				lp.setObjective(col, getCostForModelMove(t));//INV+ (t < invisibleTransitions ? 0.001 : 0));
 				lp.setMat(alignmentCostRow, col, getCostForModelMove(t));
 
 				lp.setMat(progressRow, col, 1);
@@ -326,11 +326,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 		for (short t = 0; t < transitions; t++) {
 			int col = maxLengthX * spCols + t;
 			// Set Objective
-			if (t < invisibleTransitions) {
-				lp.setObjective(col, getCostForModelMove(t) + 0.001);
-			} else {
-				lp.setObjective(col, getCostForModelMove(t));
-			}
+			lp.setObjective(col, getCostForModelMove(t));
 
 			lp.setMat(alignmentCostRow, col, getCostForModelMove(t));
 
@@ -355,9 +351,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 
 			// count progress
 			lp.setMat(progressRow, col, 1);
-			if (trans2label[t] >= 0) {
-				lp.setInt(col, integerVariables);
-			}
+			lp.setInt(col, integerVariables);
 
 			// Add labels
 			if (NAMES) {
@@ -397,10 +391,10 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 		int row = spRows * maxLengthX + places + labels;
 		// set up the comparisons and sums
 		for (int i = 0; i < maxLengthX - 1; i++) {
-			for (int t = i * spCols + invisibleTransitions; t < (i + 1) * spCols; t++) {
+			for (int t = i * spCols /* INV +invisibleTransitions */; t < (i + 1) * spCols; t++) {
 				lp.setMat(row + i, t, 1);
 			}
-			for (int t = (i + 1) * spCols + invisibleTransitions; t < (i + 2) * spCols; t++) {
+			for (int t = (i + 1) * spCols /* INV+ invisibleTransitions */; t < (i + 2) * spCols; t++) {
 				lp.setMat(row + i, t, -1);
 			}
 			if (NAMES) {
@@ -412,10 +406,10 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 
 		int constant = Math.max(trace.length - startTraceAt, transitions); //TODO:??
 		// C.lastX - Y >= 0
-		for (int t = (maxLengthX - 1) * spCols + invisibleTransitions; t < maxLengthX * spCols; t++) {
+		for (int t = (maxLengthX - 1) * spCols /* + invisibleTransitions */; t < maxLengthX * spCols; t++) {
 			lp.setMat(row, t, constant);
 		}
-		for (int t = maxLengthX * spCols + invisibleTransitions; t < maxLengthX * spCols + 2 * transitions
+		for (int t = maxLengthX * spCols /* + invisibleTransitions */; t < maxLengthX * spCols + 2 * transitions
 				- invisibleTransitions; t++) {
 			lp.setMat(row, t, -1);
 		}
@@ -441,7 +435,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 
 		// sos constraints, sum max 1
 		for (int i = 0; i < maxLengthX; i++) {
-			for (int t = i * spCols + invisibleTransitions; t < (i + 1) * spCols; t++) {
+			for (int t = i * spCols /* + invisibleTransitions */; t < (i + 1) * spCols; t++) {
 				lp.setMat(row + i, t, 1);
 			}
 			if (NAMES) {
@@ -805,7 +799,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 					int cost_c = (int) (vars[c] * matrix.getMat(alignmentCostRow, c) + 0.5);
 					costX += cost_c;
 					if (c % spCols < transitions) {
-						// Trailing modelMove, to be removed later
+						// Trailing modelMove of visisble type, to be removed later
 						costTrailModelMoves += cost_c;
 					} else {
 						// log or sync move, reset trailing model move cost

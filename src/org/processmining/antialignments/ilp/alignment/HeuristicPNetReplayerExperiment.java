@@ -2,6 +2,9 @@ package org.processmining.antialignments.ilp.alignment;
 
 import gnu.trove.list.TIntList;
 
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -39,7 +42,7 @@ import org.processmining.plugins.replayer.replayresult.SyncReplayResult;
 
 @KeepInProMCache
 @PNReplayAlgorithm
-public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer<Petrinet> implements
+public class HeuristicPNetReplayerExperiment extends AbstractHeuristicILPReplayer<Petrinet> implements
 		IPNReplayAlgorithm {
 
 	static final String SOLVER = "ILP Solver";
@@ -60,6 +63,8 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 	private int expectedModelMovesParameter;
 	private int backtrackLimitParameter;
 	private double backtrackThresholdParameter;
+	private int estRows;
+	private int estColumns;
 
 	public PNRepResultImpl replayLog(PluginContext context, PetrinetGraph net, XLog xLog, TransEvClassMapping mapping,
 			IPNReplayParameter parameters) throws AStarException {
@@ -90,9 +95,13 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 		long startWhole = System.currentTimeMillis();
 
 		PNRepResultImpl result = null;
+
+		context.getProgress().setMaximum(
+				cutOffEvent * ((int) (Math.log(cutOffEvent) / Math.log(2) + 0.5)) * log.length + cutOffEvent);
+
 		double minCost;
 		try {
-			calculator.setCutOffLength(cutOffEvent);
+			calculator.setCutOffLength(3);
 			calculator.setMinEvents(0);
 
 			context.log("Starting replay on the empty trace with " + cutOffEvent + " exact variables.");
@@ -101,13 +110,34 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 		} catch (LPMatrixException _) {
 			minCost = 0.0;
 		}
-		context.getProgress().inc();
-		calculator.setGurobi();
 
-		result = computeAlignments(context, calculator, minCost, cutOffEvent, minEvent, backtrackLimitParameter,
-				backtrackThresholdParameter);
+		PrintStream out;
+		try {
+			out = new PrintStream(new File("d:/temp/antialignment/log.csv"));
+		} catch (FileNotFoundException e1) {
+			out = System.out;
+		}
+		String sep = ";";
+		PNRepResultExportPlugin export = new PNRepResultExportPlugin();
+		export.printResult(out, null, -1, -1, sep);
+		switchToGurobi(context, calculator, cutOffEvent, minEvent);
 
-		result.addInfo(MINMODELMOVECOST, Double.toString(minCost));
+		for (int c = 1; c < cutOffEvent; c++) {
+			for (int b = 1; b <= c; b++) {
+				result = computeAlignments(context, calculator, minCost, c, 0, b, backtrackThresholdParameter);
+				export.printResult(out, result, estRows, estColumns, sep);
+				for (int e = 1; e < c; e = (int) (1.5 * e + 0.5)) {
+					System.out.print(".");
+
+					result = computeAlignments(context, calculator, minCost, c, e, b, backtrackThresholdParameter);
+					export.printResult(out, result, estRows, estColumns, sep);
+				}
+				System.out.println(".");
+				result = computeAlignments(context, calculator, minCost, c, c, b, backtrackThresholdParameter);
+				export.printResult(out, result, estRows, estColumns, sep);
+			}
+		}
+		out.close();
 
 		long endWhole = System.currentTimeMillis();
 
@@ -125,30 +155,35 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 		calculator.setLPSolve();
 		boolean gurobi = false;
 
-		//DEBUGCODE
-		int cBound = 250;
-		int rBound = 250;
-
 		// estimate number of columns and rows (This is not exact!)
-		int columns = (net.getTransitions().size() + 2 * minEvent) * cutOffEvent + 2 * net.getTransitions().size()
+		estColumns = (net.getTransitions().size() + 2 * minEvent) * cutOffEvent + 2 * net.getTransitions().size()
 				+ label2short.size();
-		int rows = (net.getPlaces().size() + 2 * minEvent) * cutOffEvent + net.getPlaces().size() + label2short.size();
+		estRows = (net.getPlaces().size() + minEvent) * cutOffEvent + net.getPlaces().size() + label2short.size()
+				+ cutOffEvent + 2;
+
+		//		// the estimated minimum number of rows and colums are known.
+		//		while (rows < rBound && columns < cBound) {
+		//			// Try to increase without loosing too much CPU time in LpSolve
+		//			cutOffEvent += expectedModelMoves;
+		//			minEvent++;
+		//			columns = (net.getTransitions().size() + 2 * minEvent) * cutOffEvent + 2 * net.getTransitions().size()
+		//					+ label2short.size();
+		//			rows = (net.getPlaces().size() + 2 * minEvent) * cutOffEvent + net.getPlaces().size() + label2short.size();
+		//		}
 
 		// But what if that fails?
-		if (columns > cBound || rows > rBound) {
-			// Try to setup Gurobi?
-			if (calculator.setGurobi()) {
-				gurobi = true;
-				context.log("Solver set to Gurobi, because of problem size");
-			} else if (minEvent > 1) {
-				context.log("Failed to load Gurobi...");
-				// cannot setup gurobi. Nothing we can do, but resort to smallest case.
-				minEvent = 1;
-				cutOffEvent = 1 + expectedModelMovesParameter;
-			}
 
+		if (calculator.setGurobi()) {
+			gurobi = true;
+			context.log("Solver set to Gurobi, because of problem size");
+		} else if (minEvent > 1) {
+			context.log("Failed to load Gurobi...");
+			// cannot setup gurobi. Nothing we can do, but resort to smallest case.
+			minEvent = 1;
+			cutOffEvent = 1 + expectedModelMovesParameter;
 		}
-		context.log("Estimated ILP size: " + columns + " columns and " + rows + " rows.");
+
+		context.log("Estimated ILP size: " + estColumns + " columns and " + estRows + " rows.");
 
 		return gurobi;
 	}
@@ -378,7 +413,7 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 	}
 
 	public String toString() {
-		return "A Heuristic Cost-based Fitness with ILP, assuming at most " + Short.MAX_VALUE
+		return "A Heuristic Cost-based Fitness Experiment, assuming at most " + Short.MAX_VALUE
 				+ " tokens in each place.";
 	}
 

@@ -1,45 +1,39 @@
 package org.processmining.antialignments.ilp.alignment;
 
-import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.PrintStream;
 
-import org.processmining.contexts.uitopia.UIPluginContext;
-import org.processmining.contexts.uitopia.annotations.UITopiaVariant;
-import org.processmining.framework.plugin.annotations.Plugin;
-import org.processmining.framework.plugin.annotations.PluginLevel;
-import org.processmining.framework.plugin.annotations.PluginVariant;
 import org.processmining.plugins.petrinet.replayresult.PNRepResult;
 import org.processmining.plugins.replayer.replayresult.SyncReplayResult;
 
-@Plugin(name = "Write PN rep result", level = PluginLevel.Local, //
-returnLabels = { "nothing" }, returnTypes = { Object.class },//
-parameterLabels = { "Replay Result" }, //
-help = "Measure precision/generalization using anti alignments.", userAccessible = true)
+// @Plugin(name = "Write PN rep result", level = PluginLevel.Local, //
+// returnLabels = { "nothing" }, returnTypes = { Object.class },//
+// parameterLabels = { "Replay Result" }, //
+// help = "Measure precision/generalization using anti alignments.",
+// userAccessible = true)
 public class PNRepResultExportPlugin {
 
-	@UITopiaVariant(affiliation = UITopiaVariant.EHV, author = "Boudewijn van Dongen", email = "b.f.v.dongen@tue.nl", //
-	pack = "AntiAlignments")
-	@PluginVariant(variantLabel = "default", requiredParameterLabels = { 0 })
-	public Object export(UIPluginContext context, PNRepResult result) {
-		PrintStream out;
-		try {
-			out = new PrintStream(new File("d:/temp/antialignment/exported.csv"));
-		} catch (FileNotFoundException e1) {
-			out = System.out;
-		}
-		String sep = ";";
+	//	@UITopiaVariant(affiliation = UITopiaVariant.EHV, author = "Boudewijn van Dongen", email = "b.f.v.dongen@tue.nl", //
+	//	pack = "AntiAlignments")
+	//	@PluginVariant(variantLabel = "default", requiredParameterLabels = { 0 })
+	//	public Object export(UIPluginContext context, PNRepResult result) {
+	//		PrintStream out;
+	//		try {
+	//			out = new PrintStream(new File("d:/temp/antialignment/exported.csv"));
+	//		} catch (FileNotFoundException e1) {
+	//			out = System.out;
+	//		}
+	//		String sep = ";";
+	//
+	//		printResult(out, null, 0, 0, sep);
+	//
+	//		printResult(out, result, -1, -1, sep);
+	//
+	//		out.close();
+	//		return null;
+	//
+	//	}
 
-		printResult(out, null, sep);
-
-		printResult(out, result, sep);
-
-		out.close();
-		return null;
-
-	}
-
-	public void printResult(PrintStream out, PNRepResult result, String sep) {
+	public void printResult(PrintStream out, PNRepResult result, int estRows, int estColumns, String sep) {
 		if (result == null) {
 			out.print("Solver");
 			out.print(sep);
@@ -74,6 +68,10 @@ public class PNRepResultExportPlugin {
 			out.print("AlignmentLength");
 			out.print(sep);
 			out.print("Reliable");
+			out.print(sep);
+			out.print("EstimatedRows");
+			out.print(sep);
+			out.print("EstimatedColumns");
 			out.println();
 
 		} else {
@@ -109,6 +107,10 @@ public class PNRepResultExportPlugin {
 				out.print(r.getInfo().get(PNRepResult.ORIGTRACELENGTH));
 				out.print(sep);
 				out.print(r.getStepTypes().size());
+				out.print(sep);
+				out.print(estRows);
+				out.print(sep);
+				out.print(estColumns);
 				out.print(sep);
 				out.print(Boolean.toString(r.isReliable()));
 				out.println();

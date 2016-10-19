@@ -205,7 +205,7 @@ public abstract class AbstractILPCalculator {
 					dir = (short) ((Arc) e).getWeight();
 				}
 				int m = (p << 16) | t;
-				if (dir < 0 || trans2label[t] < 0) {
+				if (dir < 0) {//BVD: Don't treat invisible steps in a special way || trans2label[t] < 0) {
 					aMinusList.adjustOrPutValue(m, dir, dir);
 				}
 				aMatrixList.adjustOrPutValue(m, dir, dir);

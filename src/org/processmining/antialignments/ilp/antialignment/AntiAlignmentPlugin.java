@@ -24,6 +24,7 @@ import org.processmining.models.semantics.petrinet.Marking;
 import org.processmining.plugins.connectionfactories.logpetrinet.TransEvClassMapping;
 import org.processmining.plugins.petrinet.replayer.PNLogReplayer;
 import org.processmining.plugins.petrinet.replayresult.PNRepResult;
+import org.processmining.plugins.petrinet.replayresult.PNRepResultImpl;
 
 @Plugin(name = "Anti-Alignment Precision/Generalization", level = PluginLevel.NightlyBuild, //
 returnLabels = { "Anti-alignments" }, returnTypes = { PNRepResult.class },//
@@ -86,7 +87,7 @@ public class AntiAlignmentPlugin {
 				context.getFutureResult(0).cancel(true);
 				return null;
 			}
-			PNRepResult replayRes = basicCodeStructureWithAlignments(context.getProgress(), net, initialMarking,
+			PNRepResultImpl replayRes = basicCodeStructureWithAlignments(context.getProgress(), net, initialMarking,
 					finalMarking, log, alignments, mapping, ui.getParameters());
 			if (replayRes != null) {
 				context.addConnection(new PNRepResultAllRequiredParamConnection("Connection between replay result, "
@@ -129,7 +130,7 @@ public class AntiAlignmentPlugin {
 					context, net);
 			Marking finalMarking = finalMarkingConn.getObjectWithRole(FinalMarkingConnection.MARKING);
 
-			PNRepResult replayRes = basicCodeStructureWithAlignments(context.getProgress(), net, initialMarking,
+			PNRepResultImpl replayRes = basicCodeStructureWithAlignments(context.getProgress(), net, initialMarking,
 					finalMarking, log, alignments, mapping, parameters);
 			if (replayRes != null) {
 				context.addConnection(new PNRepResultAllRequiredParamConnection("Connection between replay result, "
@@ -152,13 +153,13 @@ public class AntiAlignmentPlugin {
 		return null;
 	}
 
-	public PNRepResult basicCodeStructureWithAlignments(Progress progress, Petrinet net, Marking initialMarking,
+	public PNRepResultImpl basicCodeStructureWithAlignments(Progress progress, Petrinet net, Marking initialMarking,
 			Marking finalMarking, XLog xLog, PNRepResult alignments, TransEvClassMapping mapping,
 			AntiAlignmentParameters parameters) {
 
 		HeuristicAntiAlignmentAlgorithm algorithm = new HeuristicAntiAlignmentAlgorithm(net, initialMarking,
 				finalMarking, xLog, alignments, mapping);
-		
+
 		AntiAlignments aa = algorithm.computeAntiAlignments(progress, parameters);
 
 		AntiAlignmentValues values = algorithm.computePrecisionAndGeneralization(aa);
