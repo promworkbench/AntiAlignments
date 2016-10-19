@@ -24,7 +24,6 @@ import org.processmining.models.semantics.petrinet.Marking;
 import org.processmining.plugins.connectionfactories.logpetrinet.TransEvClassMapping;
 import org.processmining.plugins.petrinet.replayer.PNLogReplayer;
 import org.processmining.plugins.petrinet.replayresult.PNRepResult;
-import org.processmining.plugins.petrinet.replayresult.PNRepResultImpl;
 
 @Plugin(name = "Anti-Alignment Precision/Generalization", level = PluginLevel.NightlyBuild, //
 returnLabels = { "Anti-alignments" }, returnTypes = { PNRepResult.class },//
@@ -87,7 +86,7 @@ public class AntiAlignmentPlugin {
 				context.getFutureResult(0).cancel(true);
 				return null;
 			}
-			PNRepResultImpl replayRes = basicCodeStructureWithAlignments(context.getProgress(), net, initialMarking,
+			PNRepResult replayRes = basicCodeStructureWithAlignments(context.getProgress(), net, initialMarking,
 					finalMarking, log, alignments, mapping, ui.getParameters());
 			if (replayRes != null) {
 				context.addConnection(new PNRepResultAllRequiredParamConnection("Connection between replay result, "
@@ -130,7 +129,7 @@ public class AntiAlignmentPlugin {
 					context, net);
 			Marking finalMarking = finalMarkingConn.getObjectWithRole(FinalMarkingConnection.MARKING);
 
-			PNRepResultImpl replayRes = basicCodeStructureWithAlignments(context.getProgress(), net, initialMarking,
+			PNRepResult replayRes = basicCodeStructureWithAlignments(context.getProgress(), net, initialMarking,
 					finalMarking, log, alignments, mapping, parameters);
 			if (replayRes != null) {
 				context.addConnection(new PNRepResultAllRequiredParamConnection("Connection between replay result, "
@@ -153,7 +152,7 @@ public class AntiAlignmentPlugin {
 		return null;
 	}
 
-	public PNRepResultImpl basicCodeStructureWithAlignments(Progress progress, Petrinet net, Marking initialMarking,
+	public PNRepResult basicCodeStructureWithAlignments(Progress progress, Petrinet net, Marking initialMarking,
 			Marking finalMarking, XLog xLog, PNRepResult alignments, TransEvClassMapping mapping,
 			AntiAlignmentParameters parameters) {
 
