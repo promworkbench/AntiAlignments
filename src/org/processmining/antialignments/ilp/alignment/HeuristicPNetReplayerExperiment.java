@@ -18,11 +18,14 @@ import org.deckfour.xes.classification.XEventClass;
 import org.deckfour.xes.classification.XEventClasses;
 import org.deckfour.xes.classification.XEventClassifier;
 import org.deckfour.xes.extension.std.XConceptExtension;
+import org.deckfour.xes.factory.XFactoryRegistry;
 import org.deckfour.xes.info.XLogInfo;
 import org.deckfour.xes.info.XLogInfoFactory;
 import org.deckfour.xes.model.XLog;
+import org.deckfour.xes.model.XTrace;
 import org.processmining.antialignments.ilp.util.AbstractHeuristicILPReplayer;
 import org.processmining.antialignments.ilp.util.Representative;
+import org.processmining.antialignments.test.AlignmentSetup;
 import org.processmining.framework.plugin.PluginContext;
 import org.processmining.framework.plugin.annotations.KeepInProMCache;
 import org.processmining.framework.util.Pair;
@@ -56,6 +59,8 @@ public class HeuristicPNetReplayerExperiment extends AbstractHeuristicILPReplaye
 
 	static final String MINMODELMOVECOST = "Minimal model move cost";
 
+	private final static int MAXTRACE = 20;
+
 	private Map<Transition, Integer> mapTrans2Cost;
 	private Map<XEventClass, Integer> mapEvClass2Cost;
 	private Map<Transition, Integer> mapSync2Cost;
@@ -87,10 +92,35 @@ public class HeuristicPNetReplayerExperiment extends AbstractHeuristicILPReplaye
 		int cutOffEvent = expectedModelMovesParameter + 1;
 		int minEvent = 1;
 
-		switchToGurobi(context, calculator, cutOffEvent, minEvent);
+		calculator.setLPSolve();
 
 		context.log("Starting replay with " + cutOffEvent + " exact variables containing at least " + minEvent
 				+ " labeled moves.");
+
+		// For BenchMarking Purposes
+
+		PNRepResult[][] realAlignments = new PNRepResult[Math.min(MAXTRACE, log.length)][2];
+		for (int t = 0; t < realAlignments.length; t++) {
+
+			XLog newLog = XFactoryRegistry.instance().currentDefault().createLog();
+			int tr = log2xLog[t].getNumber();
+			newLog.add((XTrace) xLog.get(tr).clone());
+
+			// Setup the alignmentAlgorithm
+			AlignmentSetup alignmentAlgorithm = new AlignmentSetup((Petrinet) net, newLog, mapping, mapTrans2Cost,
+					mapEvClass2Cost);
+
+			// Compute Alignments trace by trace
+			context.log("Starting real replay on trace " + t + " without ILP.");
+			realAlignments[t][0] = alignmentAlgorithm.getAlignment(context, initialMarking, finalMarking, false);
+			realAlignments[t][0].iterator().next().getTraceIndex().clear();
+			realAlignments[t][0].iterator().next().getTraceIndex().add(tr);
+
+			context.log("Starting real replay on trace " + t + " with ILP.");
+			realAlignments[t][1] = alignmentAlgorithm.getAlignment(context, initialMarking, finalMarking, true);
+			realAlignments[t][1].iterator().next().getTraceIndex().clear();
+			realAlignments[t][1].iterator().next().getTraceIndex().add(tr);
+		}
 
 		long startWhole = System.currentTimeMillis();
 
@@ -111,6 +141,8 @@ public class HeuristicPNetReplayerExperiment extends AbstractHeuristicILPReplaye
 			minCost = 0.0;
 		}
 
+		// Starting full-blown experiment
+
 		PrintStream out;
 		try {
 			out = new PrintStream(new File("d:/temp/antialignment/log.csv"));
@@ -120,22 +152,34 @@ public class HeuristicPNetReplayerExperiment extends AbstractHeuristicILPReplaye
 		String sep = ";";
 		PNRepResultExportPlugin export = new PNRepResultExportPlugin();
 		export.printResult(out, null, -1, -1, sep);
-		switchToGurobi(context, calculator, cutOffEvent, minEvent);
 
-		for (int c = 1; c < cutOffEvent; c++) {
-			for (int b = 1; b <= c; b++) {
-				result = computeAlignments(context, calculator, minCost, c, 0, b, backtrackThresholdParameter);
-				export.printResult(out, result, estRows, estColumns, sep);
-				for (int e = 1; e < c; e = (int) (1.5 * e + 0.5)) {
-					System.out.print(".");
+		for (int t = 0; t < realAlignments.length; t++) {
+			realAlignments[t][0].getInfo().put(HeuristicPNetReplayerAlgorithm.SOLVER, "A*");
+			export.printResult(out, realAlignments[t][0], -1, -1, sep);
+			realAlignments[t][1].getInfo().put(HeuristicPNetReplayerAlgorithm.SOLVER, "A*_ILP");
+			export.printResult(out, realAlignments[t][1], -1, -1, sep);
+		}
+		out.flush();
 
-					result = computeAlignments(context, calculator, minCost, c, e, b, backtrackThresholdParameter);
+		for (int solver = 0; solver < 1; solver++) {
+
+			for (int c = 1; c < cutOffEvent; c++) {
+				for (int b = 1; b <= c; b++) {
+					result = computeAlignments(context, calculator, minCost, c, 0, b, backtrackThresholdParameter);
+					export.printResult(out, result, estRows, estColumns, sep);
+					for (int e = 1; e < c; e = (int) (1.5 * e + 0.5)) {
+						System.out.print(".");
+
+						result = computeAlignments(context, calculator, minCost, c, e, b, backtrackThresholdParameter);
+						export.printResult(out, result, estRows, estColumns, sep);
+					}
+					System.out.println(".");
+					result = computeAlignments(context, calculator, minCost, c, c, b, backtrackThresholdParameter);
 					export.printResult(out, result, estRows, estColumns, sep);
 				}
-				System.out.println(".");
-				result = computeAlignments(context, calculator, minCost, c, c, b, backtrackThresholdParameter);
-				export.printResult(out, result, estRows, estColumns, sep);
 			}
+
+			calculator.setGurobi();
 		}
 		out.close();
 
@@ -191,7 +235,7 @@ public class HeuristicPNetReplayerExperiment extends AbstractHeuristicILPReplaye
 	public PNRepResultImpl computeAlignments(PluginContext context, AlignmentILPCalculator calculator, double minCost,
 			int cutOffEvent, int minEvent, int backtrackLimit, double backtrackThreshold) {
 		List<SyncReplayResult> results = new ArrayList<>(log.length);
-		for (int tr = 0; tr < log.length && !context.getProgress().isCancelled(); tr++) {
+		for (int tr = 0; tr < log.length && tr < MAXTRACE && !context.getProgress().isCancelled(); tr++) {
 			//		for (int tr = log.length; tr-- > 0 && !context.getProgress().isCancelled();) {
 			try {
 				calculator.setMinEvents(Math.min(minEvent, log[tr].length));
@@ -199,22 +243,16 @@ public class HeuristicPNetReplayerExperiment extends AbstractHeuristicILPReplaye
 				calculator.setBacktrackLimit(backtrackLimit);
 				calculator.setBacktrackThreshold(backtrackThreshold);
 
-				//				calculator.setGurobi();
-				//				calculator.setMinEvents(5);
-				//				calculator.setCutOffLength(20);
-
 				context.log("Starting replay of trace " + tr + "/" + log.length + " with " + cutOffEvent
 						+ " exact variables containing at least " + minEvent + " labeled moves.");
 
 				long start = System.currentTimeMillis();
 				TIntList moves = calculator.getAlignment(context.getProgress(), initialMarking, finalMarking, tr);
-				//				calculator.printMoves(moves, log[tr]);
 				boolean reliable = calculator.checkAndReorderFiringSequence(moves, initialMarking, finalMarking, true);
 				reliable &= calculator.checkTrace(moves, log[tr], true);
 				long end = System.currentTimeMillis();
 
 				Representative rep = log2xLog[tr];
-				//				XTrace trace = xLog.get(rep.getRepresented().get(0));
 				SyncReplayResult srr = getSyncReplayResult(calculator, moves, rep.getRepresented().get(0), minCost,
 						(int) (end - start), reliable);
 				for (int xt = 1; xt < rep.getRepresented().size(); xt++) {

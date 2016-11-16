@@ -4,6 +4,7 @@
 	<classpathentry kind="src" path="src-test"/>
 	<classpathentry kind="src" output="tests/bin-test" path="tests/src-test"/>
 	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
+	<classpathentry combineaccessrules="false" kind="src" path="/ProM"/>
 	<classpathentry kind="lib" path="stdlib/axis.jar"/>
 	<classpathentry kind="lib" path="stdlib/bsh-2.0b4.jar"/>
 	<classpathentry kind="lib" path="stdlib/collections-generic-4.01.jar"/>
@@ -42,6 +43,5 @@
 	<classpathentry kind="lib" path="lib/com.google.ortools.jar"/>
 	<classpathentry kind="lib" path="lib/protobuf.jar"/>
 	<classpathentry kind="con" path="org.apache.ivyde.eclipse.cpcontainer.IVYDE_CONTAINER/?project=NewPackageIvy&amp;ivyXmlPath=ivy.xml&amp;confs=*&amp;ivySettingsPath=ivysettings.xml&amp;loadSettingsOnDemand=false&amp;ivyUserDir=&amp;propertyFiles="/>
-	<classpathentry kind="lib" path="/EfficientStorage/lib/gurobi.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

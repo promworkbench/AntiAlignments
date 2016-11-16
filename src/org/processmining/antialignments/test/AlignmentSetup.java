@@ -11,6 +11,7 @@ import org.deckfour.xes.info.XLogInfo;
 import org.deckfour.xes.info.XLogInfoFactory;
 import org.deckfour.xes.info.impl.XLogInfoImpl;
 import org.deckfour.xes.model.XLog;
+import org.processmining.framework.plugin.PluginContext;
 import org.processmining.models.graphbased.directed.petrinet.Petrinet;
 import org.processmining.models.graphbased.directed.petrinet.PetrinetGraph;
 import org.processmining.models.graphbased.directed.petrinet.elements.Transition;
@@ -50,7 +51,18 @@ public class AlignmentSetup {
 
 	}
 
-	public PNRepResult getAlignment(Marking initialMarking, Marking finalMarking, boolean useILP) {
+	public AlignmentSetup(Petrinet net, XLog log, TransEvClassMapping mapping, Map<Transition, Integer> costMOS,
+			Map<XEventClass, Integer> costMOT) {
+
+		this.net = net;
+		this.log = log;
+		this.costMOS = costMOS;
+		this.costMOT = costMOT;
+		this.mapping = mapping;
+
+	}
+
+	public PNRepResult getAlignment(PluginContext context, Marking initialMarking, Marking finalMarking, boolean useILP) {
 
 		AbstractPetrinetReplayer<?, ?> replayEngine;
 		if (useILP) {
@@ -68,7 +80,7 @@ public class AlignmentSetup {
 
 		PNRepResult result = null;
 		try {
-			result = replayEngine.replayLog(null, net, log, mapping, parameters);
+			result = replayEngine.replayLog(context, net, log, mapping, parameters);
 
 		} catch (AStarException e) {
 			e.printStackTrace();

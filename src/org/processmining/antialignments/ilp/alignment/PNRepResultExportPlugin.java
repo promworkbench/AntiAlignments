@@ -67,13 +67,13 @@ public class PNRepResultExportPlugin {
 			out.print(sep);
 			out.print("AlignmentLength");
 			out.print(sep);
-			out.print("Reliable");
-			out.print(sep);
 			out.print("EstimatedRows");
 			out.print(sep);
 			out.print("EstimatedColumns");
+			out.print(sep);
+			out.print("Reliable");
 			out.println();
-
+			
 		} else {
 			for (SyncReplayResult r : result) {
 				out.print(result.getInfo().get(HeuristicPNetReplayerAlgorithm.SOLVER));
