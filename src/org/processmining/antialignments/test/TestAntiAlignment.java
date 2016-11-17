@@ -557,7 +557,7 @@ public class TestAntiAlignment {
 
 		// Compute Alignments
 		//ERROR Null Context
-		PNRepResult alignments = alignmentAlgorithm.getAlignment(null, initialMarking, finalMarking, false);
+		PNRepResult alignments = alignmentAlgorithm.getAlignment(null, initialMarking, finalMarking, false, 0);
 
 		return new AntiAlignmentPlugin().basicCodeStructureWithAlignments(null, net, initialMarking, finalMarking,
 				xLog, alignments, alignmentAlgorithm.mapping, new AntiAlignmentParameters(5, 1.0, 2, 2.0));

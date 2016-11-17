@@ -46,8 +46,8 @@ public class PetriNetSimulator {
 		PetrinetSemantics semantics = PetrinetSemanticsFactory.regularPetrinetSemantics(net.getClass());
 		semantics.initialize(net.getTransitions(), initialMarking);
 
-		int maxNoise = 25;
-		int tracePerNoise = 10;
+		int maxNoise = 20;
+		int tracePerNoise = 4;
 
 		//generate 25 traces
 		for (int i = 0; i <= maxNoise; i++) {

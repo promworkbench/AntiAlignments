@@ -4,6 +4,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 import nl.tue.astar.AStarException;
+import nl.tue.astar.AStarThread.Canceller;
+import nl.tue.astar.impl.memefficient.MemoryEfficientAStarAlgorithm;
 
 import org.deckfour.xes.classification.XEventClass;
 import org.deckfour.xes.classification.XEventClassifier;
@@ -19,6 +21,11 @@ import org.processmining.models.semantics.petrinet.Marking;
 import org.processmining.plugins.astar.petrinet.AbstractPetrinetReplayer;
 import org.processmining.plugins.astar.petrinet.PetrinetReplayerWithILP;
 import org.processmining.plugins.astar.petrinet.PetrinetReplayerWithoutILP;
+import org.processmining.plugins.astar.petrinet.impl.PHead;
+import org.processmining.plugins.astar.petrinet.impl.PILPDelegate;
+import org.processmining.plugins.astar.petrinet.impl.PILPTail;
+import org.processmining.plugins.astar.petrinet.impl.PNaiveDelegate;
+import org.processmining.plugins.astar.petrinet.impl.PNaiveTail;
 import org.processmining.plugins.connectionfactories.logpetrinet.TransEvClassMapping;
 import org.processmining.plugins.petrinet.replayer.algorithms.IPNReplayParameter;
 import org.processmining.plugins.petrinet.replayer.algorithms.costbasedcomplete.CostBasedCompleteParam;
@@ -62,13 +69,32 @@ public class AlignmentSetup {
 
 	}
 
-	public PNRepResult getAlignment(PluginContext context, Marking initialMarking, Marking finalMarking, boolean useILP) {
+	public PNRepResult getAlignment(PluginContext context, Marking initialMarking, Marking finalMarking,
+			boolean useILP, final int minCost) {
 
 		AbstractPetrinetReplayer<?, ?> replayEngine;
 		if (useILP) {
-			replayEngine = new PetrinetReplayerWithILP();
+			replayEngine = new PetrinetReplayerWithILP() {
+				@Override
+				protected int getMinBoundMoveModel(Canceller canceller, final int delta,
+						final MemoryEfficientAStarAlgorithm<PHead, PILPTail> aStar, PILPDelegate delegateD)
+						throws AStarException {
+					return minCost;
+
+				}
+
+			};
 		} else {
-			replayEngine = new PetrinetReplayerWithoutILP();
+			replayEngine = new PetrinetReplayerWithoutILP() {
+				@Override
+				protected int getMinBoundMoveModel(Canceller canceller, final int delta,
+						final MemoryEfficientAStarAlgorithm<PHead, PNaiveTail> aStar, PNaiveDelegate delegateD)
+						throws AStarException {
+					return minCost;
+
+				}
+
+			};
 		}
 
 		IPNReplayParameter parameters = new CostBasedCompleteParam(costMOT, costMOS);

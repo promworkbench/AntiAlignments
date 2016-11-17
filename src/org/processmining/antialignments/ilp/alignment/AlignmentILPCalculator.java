@@ -1196,4 +1196,8 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 		return mode == MODE_LPSOLVE;
 	}
 
+	public short[][] getLog() {
+		return log;
+	}
+
 }
