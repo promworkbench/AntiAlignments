@@ -248,21 +248,7 @@ public abstract class AbstractILPCalculator {
 		if (mode == MODE_GUROBI) {
 			return new LPMatrix.SPARSE.GUROBI(gbEnv, rows, columns);
 		} else {
-			return new LPMatrix.SPARSE.LPSOLVE(rows, columns) {
-				public LpSolve toSolver() throws LPMatrixException {
-					LpSolve solver = super.toSolver();
-					try {
-						solver.setBFPFromPath("bfp_etaPFI");
-					} catch (LpSolveException e) {
-						try {
-							solver.setBFP(null);
-						} catch (LpSolveException e1) {
-							throw new LPMatrixException(e1);
-						}
-					}
-					return solver;
-				}
-			};
+			return new LPMatrix.SPARSE.LPSOLVE(rows, columns);
 		}
 	}
 
