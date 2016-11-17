@@ -22,7 +22,7 @@ import org.processmining.models.semantics.petrinet.Marking;
 import org.processmining.models.semantics.petrinet.PetrinetSemantics;
 import org.processmining.models.semantics.petrinet.impl.PetrinetSemanticsFactory;
 
-@Plugin(name = "Simulate Petrinet with noise", level = PluginLevel.Local, //
+@Plugin(name = "Simulate Petrinet with noise", level = PluginLevel.NightlyBuild, //
 returnLabels = { "log" }, returnTypes = { XLog.class },//
 parameterLabels = { "Petrinet" }, //
 help = "Simulate Petrinet with increasing noise level.", userAccessible = true)
@@ -41,51 +41,63 @@ public class PetriNetSimulator {
 		Marking initialMarking = initCon.getObjectWithRole(InitialMarkingConnection.MARKING);
 
 		Random random = new Random(542323424643l);
-		Transition[] trans = (Transition[]) net.getTransitions().toArray();
+		
+		Transition[] trans = net.getTransitions().toArray(new Transition[0]);
+		PetrinetSemantics semantics = PetrinetSemanticsFactory.regularPetrinetSemantics(net.getClass());
+		semantics.initialize(net.getTransitions(), initialMarking);
+
+		int maxNoise = 25;
+		int tracePerNoise = 10;
 
 		//generate 25 traces
-		for (int i = 0; i < 25; i++) {
-			XTrace trace = XFactoryRegistry.instance().currentDefault().createTrace();
-			log.add(trace);
+		for (int i = 0; i <= maxNoise; i++) {
 
-			PetrinetSemantics semantics = PetrinetSemanticsFactory.regularPetrinetSemantics(net.getClass());
-			semantics.setCurrentState(initialMarking);
-			Collection<Transition> enabled = semantics.getExecutableTransitions();
-			while (!enabled.isEmpty()) {
-				Transition t = enabled.iterator().next();
-				semantics.executeExecutableTransition(t);
+			for (int j = 0; j < tracePerNoise; j++) {
 
-				if (random.nextInt(25) > i) {
-					// no noise
-					XEvent event = XFactoryRegistry.instance().currentDefault().createEvent();
-					XConceptExtension.instance().assignName(event, t.getLabel());
-					trace.add(event);
-				} else {
-					// noise
-					double d = random.nextDouble();
-					if (d < 0.33) {
-						// random name for event
+				XTrace trace = XFactoryRegistry.instance().currentDefault().createTrace();
+				XConceptExtension.instance().assignName(trace,
+						"Trace " + j + " at noise level " + i / (double) maxNoise);
+				log.add(trace);
+
+				semantics.setCurrentState(initialMarking);
+
+				Collection<Transition> enabled = semantics.getExecutableTransitions();
+				while (!enabled.isEmpty()) {
+					Transition t = enabled.toArray(new Transition[0])[random.nextInt(enabled.size())];
+					semantics.executeExecutableTransition(t);
+
+					if (random.nextInt(maxNoise) > i) {
+						// no noise
 						XEvent event = XFactoryRegistry.instance().currentDefault().createEvent();
-						t = trans[random.nextInt(trans.length)];
-						XConceptExtension.instance().assignName(event, t.getLabel());
-						trace.add(event);
-					} else if (d < 0.66) {
-						// insert add extra event
-						XEvent event = XFactoryRegistry.instance().currentDefault().createEvent();
-						t = trans[random.nextInt(trans.length)];
-						XConceptExtension.instance().assignName(event, t.getLabel());
-						trace.add(event);
-
-						event = XFactoryRegistry.instance().currentDefault().createEvent();
-						t = trans[random.nextInt(trans.length)];
 						XConceptExtension.instance().assignName(event, t.getLabel());
 						trace.add(event);
 					} else {
-						// ignore event
-					}
-				}
+						// noise
+						double d = random.nextDouble();
+						if (d < 0.33) {
+							// random name for event
+							XEvent event = XFactoryRegistry.instance().currentDefault().createEvent();
+							t = trans[random.nextInt(trans.length)];
+							XConceptExtension.instance().assignName(event, t.getLabel());
+							trace.add(event);
+						} else if (d < 0.66) {
+							// insert add extra event
+							XEvent event = XFactoryRegistry.instance().currentDefault().createEvent();
+							t = trans[random.nextInt(trans.length)];
+							XConceptExtension.instance().assignName(event, t.getLabel());
+							trace.add(event);
 
-				enabled = semantics.getExecutableTransitions();
+							event = XFactoryRegistry.instance().currentDefault().createEvent();
+							t = trans[random.nextInt(trans.length)];
+							XConceptExtension.instance().assignName(event, t.getLabel());
+							trace.add(event);
+						} else {
+							// ignore event
+						}
+					}
+
+					enabled = semantics.getExecutableTransitions();
+				}
 			}
 
 		}

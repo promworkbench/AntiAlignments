@@ -59,7 +59,7 @@ public class HeuristicPNetReplayerExperiment extends AbstractHeuristicILPReplaye
 
 	static final String MINMODELMOVECOST = "Minimal model move cost";
 
-	private final static int MAXTRACE = 20;
+	private final static int MAXTRACE = 100;
 
 	private Map<Transition, Integer> mapTrans2Cost;
 	private Map<XEventClass, Integer> mapEvClass2Cost;
@@ -161,10 +161,16 @@ public class HeuristicPNetReplayerExperiment extends AbstractHeuristicILPReplaye
 		}
 		out.flush();
 
-		for (int solver = 0; solver < 1; solver++) {
+		for (int c = 1; c < cutOffEvent; c++) {
+			for (int b = 1; b <= c; b++) {
+				for (int solver = 0; solver < 2; solver++) {
 
-			for (int c = 1; c < cutOffEvent; c++) {
-				for (int b = 1; b <= c; b++) {
+					if (solver == 0) {
+						calculator.setLPSolve();
+					} else {
+						calculator.setGurobi();
+					}
+
 					result = computeAlignments(context, calculator, minCost, c, 0, b, backtrackThresholdParameter);
 					export.printResult(out, result, estRows, estColumns, sep);
 					for (int e = 1; e < c; e = (int) (1.5 * e + 0.5)) {
@@ -179,7 +185,6 @@ public class HeuristicPNetReplayerExperiment extends AbstractHeuristicILPReplaye
 				}
 			}
 
-			calculator.setGurobi();
 		}
 		out.close();
 

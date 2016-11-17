@@ -76,7 +76,7 @@ public class AlignmentSetup {
 		parameters.setFinalMarkings(finalMarking);
 		parameters.setGUIMode(false);
 		parameters.setCreateConn(false);
-		parameters.setNumThreads(Runtime.getRuntime().availableProcessors());
+		parameters.setNumThreads(1);//Runtime.getRuntime().availableProcessors());
 
 		PNRepResult result = null;
 		try {
