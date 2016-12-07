@@ -157,7 +157,6 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 			int cutOffEvent, int minEvent, int backtrackLimit, double backtrackThreshold) {
 		List<SyncReplayResult> results = new ArrayList<>(log.length);
 		for (int tr = 0; tr < log.length && !context.getProgress().isCancelled(); tr++) {
-			//		for (int tr = log.length; tr-- > 0 && !context.getProgress().isCancelled();) {
 			try {
 				calculator.setMinEvents(Math.min(minEvent, log[tr].length));
 				calculator.setCutOffLength(cutOffEvent);

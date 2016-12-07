@@ -46,8 +46,8 @@ public class PetriNetSimulator {
 		PetrinetSemantics semantics = PetrinetSemanticsFactory.regularPetrinetSemantics(net.getClass());
 		semantics.initialize(net.getTransitions(), initialMarking);
 
-		int maxNoise = 20;
-		int tracePerNoise = 4;
+		int maxNoise = 25;
+		int tracePerNoise = 1;
 
 		//generate 25 traces
 		for (int i = 0; i <= maxNoise; i++) {
@@ -66,7 +66,7 @@ public class PetriNetSimulator {
 					Transition t = enabled.toArray(new Transition[0])[random.nextInt(enabled.size())];
 					semantics.executeExecutableTransition(t);
 
-					if (random.nextInt(maxNoise) > i) {
+					if (random.nextInt(maxNoise) >= i) {
 						// no noise
 						XEvent event = XFactoryRegistry.instance().currentDefault().createEvent();
 						XConceptExtension.instance().assignName(event, t.getLabel());

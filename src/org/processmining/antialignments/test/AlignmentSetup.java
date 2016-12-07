@@ -27,7 +27,6 @@ import org.processmining.plugins.astar.petrinet.impl.PILPTail;
 import org.processmining.plugins.astar.petrinet.impl.PNaiveDelegate;
 import org.processmining.plugins.astar.petrinet.impl.PNaiveTail;
 import org.processmining.plugins.connectionfactories.logpetrinet.TransEvClassMapping;
-import org.processmining.plugins.petrinet.replayer.algorithms.IPNReplayParameter;
 import org.processmining.plugins.petrinet.replayer.algorithms.costbasedcomplete.CostBasedCompleteParam;
 import org.processmining.plugins.petrinet.replayresult.PNRepResult;
 
@@ -97,12 +96,14 @@ public class AlignmentSetup {
 			};
 		}
 
-		IPNReplayParameter parameters = new CostBasedCompleteParam(costMOT, costMOS);
+		CostBasedCompleteParam parameters = new CostBasedCompleteParam(costMOT, costMOS);
+
 		parameters.setInitialMarking(initialMarking);
 		parameters.setFinalMarkings(finalMarking);
 		parameters.setGUIMode(false);
 		parameters.setCreateConn(false);
-		parameters.setNumThreads(1);//Runtime.getRuntime().availableProcessors());
+		parameters.setNumThreads(Runtime.getRuntime().availableProcessors());
+		//		parameters.setMaxNumOfStates(1000000);
 
 		PNRepResult result = null;
 		try {

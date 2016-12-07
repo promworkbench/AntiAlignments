@@ -51,7 +51,7 @@ public abstract class AbstractILPCalculator {
 	protected final TObjectShortHashMap<Object> place2int;
 	protected final short invisibleTransitions;
 
-	protected GRBEnv gbEnv;
+	protected static GRBEnv gbEnv;
 
 	protected int mode;
 	protected int cutOffLength = 5;
@@ -119,13 +119,7 @@ public abstract class AbstractILPCalculator {
 		this.semantics.initialize(net.getTransitions(), initialMarking);
 
 		mode = MODE_LPSOLVE;
-		try {
-			gbEnv = new GRBEnv();
-			gbEnv.set(GRB.IntParam.OutputFlag, 0);
-			mode = MODE_GUROBI;
-		} catch (GRBException | UnsatisfiedLinkError | NoClassDefFoundError _) {
-			mode = MODE_LPSOLVE;
-		}
+		setGurobi();
 
 		// replay log on model (or obtain existing replay result)
 		short transitions = 0;
@@ -259,6 +253,7 @@ public abstract class AbstractILPCalculator {
 	public boolean setLPSolve() {
 		try {
 			mode = MODE_LPSOLVE;
+			// try if LpSolve works by creating a simple LP.
 			LpSolve.makeLp(1, 1).deleteLp();
 			return true;
 		} catch (LpSolveException | UnsatisfiedLinkError | NoClassDefFoundError _) {
@@ -268,8 +263,11 @@ public abstract class AbstractILPCalculator {
 
 	public boolean setGurobi() {
 		try {
-			gbEnv = new GRBEnv();
-			gbEnv.set(GRB.IntParam.OutputFlag, 0);
+			if (gbEnv == null) {
+				gbEnv = new GRBEnv();
+				gbEnv.set(GRB.IntParam.OutputFlag, 0);
+				gbEnv.set(GRB.IntParam.Threads, 1);
+			}
 			mode = MODE_GUROBI;
 			return true;
 		} catch (GRBException | UnsatisfiedLinkError | NoClassDefFoundError _) {
@@ -309,4 +307,18 @@ public abstract class AbstractILPCalculator {
 		this.backtrackThreshold = backtrackThreshold;
 	}
 
+	//	public void disposeGurobi() {
+	//		finalize();
+	//	}
+	//
+	//	protected void finalize() {
+	//		if (gbEnv != null) {
+	//			try {
+	//				gbEnv.dispose();
+	//			} catch (GRBException e) {
+	//				// Nothing to do here. Forget about it.
+	//			}
+	//		}
+	//
+	//	}
 }
