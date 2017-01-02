@@ -76,7 +76,7 @@ public class HeuristicAntiAlignmentAlgorithm extends AbstractHeuristicILPReplaye
 		int max = AntiAlignmentILPCalculator.getMaxLengthLog(maxTraceLength, maxFactor);
 
 		AntiAlignmentILPCalculator calculator2 = null;
-		AntiAlignmentILPCalculator.VERBOSE = true;
+		AntiAlignmentILPCalculator.VERBOSE = false;
 		calculator2 = new AntiAlignmentILPCalculator(net, initialMarking, finalMarking, label2short, short2label,
 				mapping, log, max, maxFactor);
 

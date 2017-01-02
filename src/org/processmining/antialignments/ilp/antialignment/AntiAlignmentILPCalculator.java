@@ -1184,7 +1184,8 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 		//-                            AAAA == mf             Xi - Xi+1<=0   Xi <= 1   Y.1 <= maxLength-lengthX 
 		LPMatrix<?> lp = setupMatrix(places * (maxLengthX + 1) + (maxLengthX - 1) + maxLengthX + 1/*                     */
 				//- y.1 - maxLength X_(lengthX-1).1 <=0 traceXHD  rem.traceHD   
-				+ 1 /*                             */+ log.length, transitions * maxLengthX + transitions + 2);
+				+ 1 //
+				+ log.length, transitions * maxLengthX + transitions + 2);
 
 		for (int block = 0; block < maxLengthX + 1; block++) {
 			int row = block * places;
@@ -1325,9 +1326,9 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 		// Setup objective function
 
 		// Minimize all invisible transitions
-		for (int t = 0; t < transitions * maxLengthX; t++) {
-			// Minimize the number of INVISIBLE transition firings in the anti-alignment
-		}
+//		for (int t = 0; t < transitions * maxLengthX; t++) {
+//			// Minimize the number of INVISIBLE transition firings in the anti-alignment
+//		}
 		for (int t = transitions * maxLengthX; t < transitions * (maxLengthX + 1); t++) {
 			if (trans2label[t % transitions] >= 0) {
 				// Maximize the number of Y transitions.
@@ -1359,7 +1360,7 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 			}
 		}
 		max += 1.0;
-		for (short tr = 0; tr < trans2label.length; tr++) {
+		for (short tr = invisibleTransitions; tr < trans2label.length; tr++) {
 			lp.setObjective(maxLengthX * transitions + tr, max - lp.getObjective(maxLengthX * transitions + tr));
 		}
 
