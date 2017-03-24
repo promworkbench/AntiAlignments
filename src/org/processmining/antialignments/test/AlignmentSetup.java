@@ -4,7 +4,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 import nl.tue.astar.AStarException;
-import nl.tue.astar.AStarThread.Canceller;
 import nl.tue.astar.impl.memefficient.MemoryEfficientAStarAlgorithm;
 
 import org.deckfour.xes.classification.XEventClass;
@@ -27,6 +26,7 @@ import org.processmining.plugins.astar.petrinet.impl.PILPTail;
 import org.processmining.plugins.astar.petrinet.impl.PNaiveDelegate;
 import org.processmining.plugins.astar.petrinet.impl.PNaiveTail;
 import org.processmining.plugins.connectionfactories.logpetrinet.TransEvClassMapping;
+import org.processmining.plugins.petrinet.replayer.algorithms.IPNReplayParameter;
 import org.processmining.plugins.petrinet.replayer.algorithms.costbasedcomplete.CostBasedCompleteParam;
 import org.processmining.plugins.petrinet.replayresult.PNRepResult;
 
@@ -75,7 +75,7 @@ public class AlignmentSetup {
 		if (useILP) {
 			replayEngine = new PetrinetReplayerWithILP() {
 				@Override
-				protected int getMinBoundMoveModel(Canceller canceller, final int delta,
+				protected int getMinBoundMoveModel(IPNReplayParameter parameters, final int delta,
 						final MemoryEfficientAStarAlgorithm<PHead, PILPTail> aStar, PILPDelegate delegateD)
 						throws AStarException {
 					return minCost;
@@ -86,7 +86,7 @@ public class AlignmentSetup {
 		} else {
 			replayEngine = new PetrinetReplayerWithoutILP() {
 				@Override
-				protected int getMinBoundMoveModel(Canceller canceller, final int delta,
+				protected int getMinBoundMoveModel(IPNReplayParameter parameters, final int delta,
 						final MemoryEfficientAStarAlgorithm<PHead, PNaiveTail> aStar, PNaiveDelegate delegateD)
 						throws AStarException {
 					return minCost;
