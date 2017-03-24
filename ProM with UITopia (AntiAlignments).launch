@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <launchConfiguration type="org.eclipse.jdt.launching.localJavaApplication">
 <listAttribute key="org.eclipse.debug.core.MAPPED_RESOURCE_PATHS">
-<listEntry value="/AntiAlignments/stdlib/ProM-Contexts.jar"/>
+<listEntry value="/AntiAlignments"/>
 </listAttribute>
 <listAttribute key="org.eclipse.debug.core.MAPPED_RESOURCE_TYPES">
-<listEntry value="1"/>
+<listEntry value="4"/>
 </listAttribute>
 <booleanAttribute key="org.eclipse.debug.core.appendEnvironmentVariables" value="true"/>
 <mapAttribute key="org.eclipse.debug.core.environmentVariables">
@@ -21,6 +21,6 @@
 <booleanAttribute key="org.eclipse.jdt.launching.DEFAULT_CLASSPATH" value="false"/>
 <stringAttribute key="org.eclipse.jdt.launching.MAIN_TYPE" value="org.processmining.contexts.uitopia.UI"/>
 <stringAttribute key="org.eclipse.jdt.launching.PROJECT_ATTR" value="AntiAlignments"/>
-<stringAttribute key="org.eclipse.jdt.launching.VM_ARGUMENTS" value="-da -Xmx8G -Djava.library.path=.\\lib;.\\stdlib;.\\dll;C:\\gurobi652\\win64\\bin"/>
+<stringAttribute key="org.eclipse.jdt.launching.VM_ARGUMENTS" value="-da -Xmx16G -Djava.library.path=.\\lib;.\\stdlib;.\\dll;C:\\gurobi652\\win64\\bin"/>
 <stringAttribute key="yk-options" value="&#13;&#10;additional-options=&#13;&#10;snapshots-dir=&#13;&#10;"/>
 </launchConfiguration>
