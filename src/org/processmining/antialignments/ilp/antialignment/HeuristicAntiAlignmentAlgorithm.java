@@ -1,18 +1,11 @@
 package org.processmining.antialignments.ilp.antialignment;
 
-import gnu.trove.iterator.TIntIterator;
-import gnu.trove.map.TShortObjectMap;
-import gnu.trove.set.TShortSet;
-import gnu.trove.set.hash.TShortHashSet;
-
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Vector;
-
-import nl.tue.astar.util.ilp.LPMatrixException;
 
 import org.deckfour.xes.classification.XEventClass;
 import org.deckfour.xes.extension.std.XConceptExtension;
@@ -33,6 +26,12 @@ import org.processmining.plugins.petrinet.replayresult.PNRepResult;
 import org.processmining.plugins.petrinet.replayresult.PNRepResultImpl;
 import org.processmining.plugins.petrinet.replayresult.StepTypes;
 import org.processmining.plugins.replayer.replayresult.SyncReplayResult;
+
+import gnu.trove.iterator.TIntIterator;
+import gnu.trove.map.TShortObjectMap;
+import gnu.trove.set.TShortSet;
+import gnu.trove.set.hash.TShortHashSet;
+import nl.tue.astar.util.ilp.LPMatrixException;
 
 public class HeuristicAntiAlignmentAlgorithm extends AbstractHeuristicILPReplayer<Petrinet> {
 
@@ -76,7 +75,6 @@ public class HeuristicAntiAlignmentAlgorithm extends AbstractHeuristicILPReplaye
 		int max = AntiAlignmentILPCalculator.getMaxLengthLog(maxTraceLength, maxFactor);
 
 		AntiAlignmentILPCalculator calculator2 = null;
-		AntiAlignmentILPCalculator.VERBOSE = false;
 		calculator2 = new AntiAlignmentILPCalculator(net, initialMarking, finalMarking, label2short, short2label,
 				mapping, log, max, maxFactor);
 

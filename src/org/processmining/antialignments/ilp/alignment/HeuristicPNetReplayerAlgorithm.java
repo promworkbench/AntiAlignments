@@ -1,15 +1,10 @@
 package org.processmining.antialignments.ilp.alignment;
 
-import gnu.trove.list.TIntList;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
-import nl.tue.astar.AStarException;
-import nl.tue.astar.util.ilp.LPMatrixException;
 
 import org.deckfour.xes.classification.XEventClass;
 import org.deckfour.xes.classification.XEventClasses;
@@ -36,6 +31,10 @@ import org.processmining.plugins.petrinet.replayresult.PNRepResult;
 import org.processmining.plugins.petrinet.replayresult.PNRepResultImpl;
 import org.processmining.plugins.petrinet.replayresult.StepTypes;
 import org.processmining.plugins.replayer.replayresult.SyncReplayResult;
+
+import gnu.trove.list.TIntList;
+import nl.tue.astar.AStarException;
+import nl.tue.astar.util.ilp.LPMatrixException;
 
 @KeepInProMCache
 @PNReplayAlgorithm
@@ -75,8 +74,8 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 				label2short, short2label, mapping, log, mapTrans2Cost, mapEvClass2Cost, mapSync2Cost);
 
 		//DEBUGCODE
-		calculator.VERBOSE = false;
-		calculator.NAMES = false;
+		calculator.VERBOSE = true;
+		calculator.NAMES = true;
 
 		// Set parameters just over the bounds for the ILP's
 		int cutOffEvent = expectedModelMovesParameter + 1;

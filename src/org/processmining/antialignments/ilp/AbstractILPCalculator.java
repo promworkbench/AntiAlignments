@@ -1,19 +1,5 @@
 package org.processmining.antialignments.ilp;
 
-import gnu.trove.iterator.TIntShortIterator;
-import gnu.trove.map.TIntShortMap;
-import gnu.trove.map.TObjectShortMap;
-import gnu.trove.map.TShortObjectMap;
-import gnu.trove.map.hash.TIntShortHashMap;
-import gnu.trove.map.hash.TObjectShortHashMap;
-import gurobi.GRB;
-import gurobi.GRBEnv;
-import gurobi.GRBException;
-import lpsolve.LpSolve;
-import lpsolve.LpSolveException;
-import nl.tue.astar.util.ilp.LPMatrix;
-import nl.tue.astar.util.ilp.LPMatrixException;
-
 import org.deckfour.xes.classification.XEventClass;
 import org.processmining.models.graphbased.directed.petrinet.Petrinet;
 import org.processmining.models.graphbased.directed.petrinet.PetrinetEdge;
@@ -28,10 +14,24 @@ import org.processmining.models.semantics.petrinet.PetrinetSemantics;
 import org.processmining.models.semantics.petrinet.impl.PetrinetSemanticsFactory;
 import org.processmining.plugins.connectionfactories.logpetrinet.TransEvClassMapping;
 
+import gnu.trove.iterator.TIntShortIterator;
+import gnu.trove.map.TIntShortMap;
+import gnu.trove.map.TObjectShortMap;
+import gnu.trove.map.TShortObjectMap;
+import gnu.trove.map.hash.TIntShortHashMap;
+import gnu.trove.map.hash.TObjectShortHashMap;
+import gurobi.GRB;
+import gurobi.GRBEnv;
+import gurobi.GRBException;
+import lpsolve.LpSolve;
+import lpsolve.LpSolveException;
+import nl.tue.astar.util.ilp.LPMatrix;
+import nl.tue.astar.util.ilp.LPMatrixException;
+
 public abstract class AbstractILPCalculator {
 
 	public static boolean VERBOSE = true;
-	public static boolean NAMES = false;
+	public static boolean NAMES = true;
 
 	protected static final int MODE_LPSOLVE = 1;
 	protected static final int MODE_GUROBI = 2;
@@ -199,7 +199,7 @@ public abstract class AbstractILPCalculator {
 					dir = (short) ((Arc) e).getWeight();
 				}
 				int m = (p << 16) | t;
-				if (dir < 0) {//BVD: Don't treat invisible steps in a special way || trans2label[t] < 0) {
+				if ((dir < 0)  || (trans2label[t] < 0)) {//{//BVD: Don't treat invisible steps in a special way
 					aMinusList.adjustOrPutValue(m, dir, dir);
 				}
 				aMatrixList.adjustOrPutValue(m, dir, dir);

@@ -51,8 +51,9 @@ public class TestAntiAlignment {
 		// "D:\\Documents\\Dropbox\\Boudewijn Werk\\Research\\Papers\\"
 		// +
 		// "2016 Precision Generalization Josep\\Models for experiments\\ExampleBookWil\\";
-		String path = "D:\\Documents\\Dropbox\\Boudewijn Werk\\Research\\Papers\\"
-				+ "2016 Precision Generalization Josep\\Models for experiments\\ExampleBookWil\\";
+		//		String path = "D:\\Documents\\Dropbox\\Boudewijn Werk\\Research\\Papers\\"
+		//				+ "2016 Precision Generalization Josep\\Models for experiments\\ExampleBookWil\\";
+		String path = "D:\\temp\\antialignment\\Dirk\\";
 
 		// path = "D:\\Documents\\CloudStation private\\Werk\\Reviews\\INS-D-16-665\\";
 

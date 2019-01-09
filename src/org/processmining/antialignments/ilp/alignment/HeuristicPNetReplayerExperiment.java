@@ -1,9 +1,5 @@
 package org.processmining.antialignments.ilp.alignment;
 
-import gnu.trove.list.TIntList;
-import gnu.trove.map.TObjectIntMap;
-import gnu.trove.map.hash.TObjectIntHashMap;
-
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.PrintStream;
@@ -12,9 +8,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
-import nl.tue.astar.AStarException;
-import nl.tue.astar.util.ilp.LPMatrixException;
 
 import org.deckfour.xes.classification.XEventClass;
 import org.deckfour.xes.classification.XEventClasses;
@@ -39,16 +32,21 @@ import org.processmining.plugins.connectionfactories.logpetrinet.TransEvClassMap
 import org.processmining.plugins.petrinet.replayer.algorithms.IPNReplayAlgorithm;
 import org.processmining.plugins.petrinet.replayer.algorithms.IPNReplayParamProvider;
 import org.processmining.plugins.petrinet.replayer.algorithms.IPNReplayParameter;
-import org.processmining.plugins.petrinet.replayer.annotations.PNReplayAlgorithm;
 import org.processmining.plugins.petrinet.replayresult.PNRepResult;
 import org.processmining.plugins.petrinet.replayresult.PNRepResultImpl;
 import org.processmining.plugins.petrinet.replayresult.StepTypes;
 import org.processmining.plugins.replayer.replayresult.SyncReplayResult;
 
+import gnu.trove.list.TIntList;
+import gnu.trove.map.TObjectIntMap;
+import gnu.trove.map.hash.TObjectIntHashMap;
+import nl.tue.astar.AStarException;
+import nl.tue.astar.util.ilp.LPMatrixException;
+
 @KeepInProMCache
-@PNReplayAlgorithm
-public class HeuristicPNetReplayerExperiment extends AbstractHeuristicILPReplayer<Petrinet> implements
-		IPNReplayAlgorithm {
+//@PNReplayAlgorithm
+public class HeuristicPNetReplayerExperiment extends AbstractHeuristicILPReplayer<Petrinet>
+		implements IPNReplayAlgorithm {
 
 	static final String SOLVER = "ILP Solver";
 	static final String TIME = "Total time (ms)";
@@ -191,8 +189,6 @@ public class HeuristicPNetReplayerExperiment extends AbstractHeuristicILPReplaye
 						//							witnessCost = srs.getInfo().get(PNRepResult.RAWFITNESSCOST);
 						//						}
 						//DEBUGCODE
-						calculator.VERBOSE = false;
-						calculator.NAMES = false;
 
 						//						for (int e = 1; e <= 1 + c / 4; e *= 2) {
 						// just run for minEvent 1;
@@ -236,8 +232,8 @@ public class HeuristicPNetReplayerExperiment extends AbstractHeuristicILPReplaye
 
 		long endWhole = System.currentTimeMillis();
 
-		result.addInfo(PNRepResult.VISTITLE, "Heuristic Alignments of "
-				+ XConceptExtension.instance().extractName(xLog) + " on " + net.getLabel());
+		result.addInfo(PNRepResult.VISTITLE,
+				"Heuristic Alignments of " + XConceptExtension.instance().extractName(xLog) + " on " + net.getLabel());
 		//		result.addInfo(CBOUND, Integer.toString(cBound));
 		//		result.addInfo(RBOUND, Integer.toString(rBound));
 		result.addInfo(TIME, Integer.toString((int) (endWhole - startWhole)));
@@ -299,8 +295,8 @@ public class HeuristicPNetReplayerExperiment extends AbstractHeuristicILPReplaye
 						+ backtrackLimit + " and solver " + (calculator.isGurobi() ? "Gurobi" : "LpSolve") + ".");
 
 				long start = System.currentTimeMillis();
-				TIntList moves = calculator.getAlignment(context.getProgress(), initialMarking, finalMarking, tr
-						- trFrom);
+				TIntList moves = calculator.getAlignment(context.getProgress(), initialMarking, finalMarking,
+						tr - trFrom);
 				boolean reliable = calculator.checkAndReorderFiringSequence(moves, initialMarking, finalMarking, true);
 				reliable &= calculator.checkTrace(moves, log[tr], true);
 				long end = System.currentTimeMillis();
@@ -461,12 +457,12 @@ public class HeuristicPNetReplayerExperiment extends AbstractHeuristicILPReplaye
 	}
 
 	/**
-	 * Return true if all replay inputs are correct: parameter type is correct
-	 * and non empty (no null); all transitions are mapped to cost; all event
-	 * classes (including dummy event class, i.e. an event class that does not
-	 * exist in log, any transitions that are NOT silent and not mapped to any
-	 * event class in the log is mapped to it) are mapped to cost; all costs
-	 * should be non negative; numStates is non negative
+	 * Return true if all replay inputs are correct: parameter type is correct and
+	 * non empty (no null); all transitions are mapped to cost; all event classes
+	 * (including dummy event class, i.e. an event class that does not exist in log,
+	 * any transitions that are NOT silent and not mapped to any event class in the
+	 * log is mapped to it) are mapped to cost; all costs should be non negative;
+	 * numStates is non negative
 	 */
 	public boolean isParameterReqCorrect(PetrinetGraph net, XLog log, TransEvClassMapping mapping,
 			IPNReplayParameter parameter) {

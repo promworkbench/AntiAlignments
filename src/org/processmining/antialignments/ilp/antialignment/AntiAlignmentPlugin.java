@@ -131,16 +131,19 @@ public class AntiAlignmentPlugin {
 
 			PNRepResult replayRes = basicCodeStructureWithAlignments(context.getProgress(), net, initialMarking,
 					finalMarking, log, alignments, mapping, parameters);
-			if (replayRes != null) {
-				context.addConnection(new PNRepResultAllRequiredParamConnection("Connection between replay result, "
-						+ XConceptExtension.instance().extractName(log) + ", and " + net.getLabel(), net, log, mapping,
-						null, null, replayRes));
-
-			}
 
 			context.getFutureResult(0).setLabel(
 					"Anti-alignments for log " + XConceptExtension.instance().extractName(log) + " and "
 							+ net.getLabel());
+
+			if (replayRes != null) {
+				PNRepResultAllRequiredParamConnection c = context
+						.addConnection(new PNRepResultAllRequiredParamConnection("Connection between replay result, "
+								+ XConceptExtension.instance().extractName(log) + ", and " + net.getLabel(), net, log,
+								mapping, null, null, replayRes));
+
+				System.out.println("Connection created!" + c.hashCode());
+			}
 
 			return replayRes;
 
