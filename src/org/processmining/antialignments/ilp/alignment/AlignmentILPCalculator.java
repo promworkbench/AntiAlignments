@@ -529,7 +529,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 						+ (mode == MODE_GUROBI ? "Gurobi" : "LpSolve") + ".csv");
 				writer.write("cutOffLength;minEvents;trace;setuptime;solvetime;totalTime;alignmentCosts;isFS;isTrace\r\n");
 				writer.flush();
-			} catch (IOException e1) {
+			} catch (IOException x) {
 				return;
 			}
 
@@ -555,7 +555,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 			}
 			try {
 				writer.close();
-			} catch (IOException e) {
+			} catch (IOException x) {
 
 			}
 		}
@@ -1130,7 +1130,7 @@ public class AlignmentILPCalculator extends AbstractILPCalculator {
 				checked = t_i;
 				try {
 					semantics.executeExecutableTransition(short2trans[t]);
-				} catch (IllegalTransitionException _) {
+				} catch (IllegalTransitionException x) {
 					// so this transition was not enabled.
 					//				assert (t.isInvisible());
 					ok &= short2trans[t].isInvisible();

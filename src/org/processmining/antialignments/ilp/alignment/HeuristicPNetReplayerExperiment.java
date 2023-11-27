@@ -310,7 +310,7 @@ public class HeuristicPNetReplayerExperiment extends AbstractHeuristicILPReplaye
 				}
 
 				results.add(srr);
-			} catch (LPMatrixException _) {
+			} catch (LPMatrixException x) {
 			}
 			context.getProgress().inc();
 

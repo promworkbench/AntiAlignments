@@ -97,7 +97,7 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 			context.log("Starting replay on the empty trace with " + cutOffEvent + " exact variables.");
 			TIntList moves = calculator.getAlignmentWithoutTrace(context.getProgress(), initialMarking, finalMarking);
 			minCost = calculator.getCost(moves, new short[0]);
-		} catch (LPMatrixException _) {
+		} catch (LPMatrixException x) {
 			minCost = 0.0;
 		}
 		context.getProgress().inc();
@@ -186,7 +186,7 @@ public class HeuristicPNetReplayerAlgorithm extends AbstractHeuristicILPReplayer
 				}
 
 				results.add(srr);
-			} catch (LPMatrixException _) {
+			} catch (LPMatrixException x) {
 			}
 			context.getProgress().inc();
 
