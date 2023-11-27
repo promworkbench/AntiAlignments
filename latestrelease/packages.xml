@@ -1,6 +1,6 @@
 
 					<packages>
-						<package name="AntiAlignments" version="6.14.2" os="all" url="AntiAlignments/AntiAlignments-6.14.2-all.zip" desc="Anti Alignments" org="Eindhoven University of Technology" license="L-GPL" author="B.F. van Dongen" auto="false" hasPlugins="true" logo="prom_subtitle_hat_300.png">
+						<package name="AntiAlignments" version="6.14.3" os="all" url="AntiAlignments/AntiAlignments-6.14.3-all.zip" desc="Anti Alignments" org="Eindhoven University of Technology" license="L-GPL" author="B.F. van Dongen" auto="false" hasPlugins="true" logo="prom_subtitle_hat_300.png">
 				    	<dependency org="prom" name="ProM-Plugins" rev="latest" changing="true" transitive="true" />
         <dependency org="prom" name="EfficientStorage" rev="latest" changing="true" transitive="true" />
  	    <dependency org="prom" name="PetriNets" rev="latest" changing="true" transitive="true" />
