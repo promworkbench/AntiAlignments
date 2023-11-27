@@ -114,7 +114,9 @@ public class AntiAlignmentILPCalculator extends AbstractILPCalculator {
 					((LpSolve) matrix.toSolver()).writeLp("D:/temp/antialignment/debugLP.lp");
 
 				} catch (Exception e1) {
-					return;
+					// HV: DO not return here, as this would prevent constructing the
+					// anti-alignment if the folder D:/temp/antialignment/ does not exist.
+					// return;
 				}
 			}
 

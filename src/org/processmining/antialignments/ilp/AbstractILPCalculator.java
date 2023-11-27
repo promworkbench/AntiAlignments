@@ -256,7 +256,7 @@ public abstract class AbstractILPCalculator {
 			// try if LpSolve works by creating a simple LP.
 			LpSolve.makeLp(1, 1).deleteLp();
 			return true;
-		} catch (LpSolveException | UnsatisfiedLinkError | NoClassDefFoundError _) {
+		} catch (LpSolveException | UnsatisfiedLinkError | NoClassDefFoundError e) {
 			return false;
 		}
 	}
@@ -270,8 +270,8 @@ public abstract class AbstractILPCalculator {
 			}
 			mode = MODE_GUROBI;
 			return true;
-		} catch (GRBException | UnsatisfiedLinkError | NoClassDefFoundError _) {
-			System.err.println(_.getMessage());
+		} catch (GRBException | UnsatisfiedLinkError | NoClassDefFoundError e) {
+			System.err.println(e.getMessage());
 			mode = MODE_LPSOLVE;
 			return false;
 		}
